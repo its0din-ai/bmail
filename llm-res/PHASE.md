@@ -18,7 +18,7 @@ Seed these from `INIT.md`, fill them in on session start, and confirm with `pwd`
 - Active phase: simplified v0.1.0 complete and verified locally.
 - Hosting: **Cloudflare Workers Free plan**. R2 is the only storage.
 - Current version (SemVer, per AGENTIC.md section 11): **0.1.0**. Not deployed, not tagged.
-- Micro-task just finished: dropped the bundled client and all MCP transports. The Worker now exposes REST only; custom tools come later.
+- Micro-task just finished: dropped the bundled client and all MCP transports, then added the ARTEX HTTP custom tool manifest. The Worker now exposes REST only; custom tools come later.
 - Next micro-task: deploy. Create the R2 bucket, fill `.env`, run `pnpm deploy:worker`, configure Email Routing, then tag `v0.1.0-{commit}`.
 - Current blockers: Cloudflare credentials and the real R2 bucket, final owner name.
 
@@ -63,6 +63,7 @@ Local end-to-end check: delivered mail to two configured domains, listed metadat
 | docs | MCP deploy | removed | Earlier MCP guidance removed |
 | feat | HTTP MCP | removed | Earlier HTTP MCP mode removed |
 | cleanup | MCP removal | done | Deleted `client/`, MCP/HTTP transports, deps, config, docs, and threat rows |
+| docs | ARTEX custom tools | done | Added `artex-custom-tools.json` and installation instructions |
 ## Decisions & notes
 
 - **Flow.** Pick an address that matches the allowlist, for example `test@mail.example.com` or `bbounty@programs.example.net`. There is no registration and no alias table. The agent polls that address with the shared key.
@@ -77,6 +78,7 @@ Local end-to-end check: delivered mail to two configured domains, listed metadat
 - **Validation.** Local parts are restricted to `[a-z0-9._+-]` with no slashes, so an address cannot escape its R2 prefix. Message ids must match `<13 digits>-<12 lowercase alnum>`.
 - **DMARC trust.** Follow the docs: read only the first `Authentication-Results` header, require `mx.cloudflare.net` as its authserv-id, then store its dmarc result. A sender-supplied header that merely mentions Cloudflare is ignored. Tested in `worker/test/index.test.ts`.
 - **No bundled client.** The Worker exposes REST only. MCP, stdio, HTTP MCP, and the Node client were removed; add custom tools later against the REST API.
+- **ARTEX custom tools.** `artex-custom-tools.json` defines three HTTP custom tools (`bmail_list_messages`, `bmail_get_message`, `bmail_ack_message`) with placeholders for the Worker URL and key. The user feeds it into the ARTEX chat; the auto agent creates them with `create_custom_tool`.
 - **Deletion.** `DELETE /v1/inbox/:address/:id` deletes the `.eml` object and returns 204, including when the object is already gone. Your tool calls it directly. The latest marker may point at a deleted object; that is harmless because new mail updates it. The owner's forwarded archive is untouched.
 - **Lifecycle.** `pnpm deploy:worker` sets an R2 lifecycle configuration with two rules: `mail/` and `latest/`, each deleting objects after `bmail_lifecycle_days` (default 7 days, `maxAge` in seconds). It uses `wrangler r2 bucket lifecycle set --file`, which replaces the bucket's lifecycle rules, so the bucket should be dedicated to bmail.
 - **No D1, no cron, no Durable Objects, no Queues, no KV.** R2 only.

@@ -77,7 +77,7 @@ Project initiation record (per `AGENTIC.md` section 0). Fill this **once, before
 
 ## Scope
 
-- In scope for v1: `email()` R2 ingest, one REST list route, one REST raw route, one REST delete/ack route, and the R2 lifecycle rule applied by the deploy script.
+- In scope for v1: `email()` R2 ingest, one REST list route, one REST raw route, one REST delete/ack route, the R2 lifecycle rule applied by the deploy script, and a sample ARTEX HTTP custom tool manifest (`artex-custom-tools.json`).
 - Out of scope: aliases, registration, D1, scheduled cleanup jobs (R2 lifecycle handles expiry), UI, outbound mail, bundled clients/MCP (custom tools later), rate limiting, full-text search.
 - Open questions:
   - Owner name

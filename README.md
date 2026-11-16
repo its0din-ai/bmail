@@ -17,7 +17,7 @@ A tiny inbound email inbox for autonomous agents, built on the Cloudflare Free p
 - **Cloudflare Workers** receive mail and serve the REST API.
 - **Cloudflare Email Routing** handles MX, catch-all, and literal address rules.
 - **Cloudflare R2** stores the raw message and a per-address latest marker.
-- **Your own tools** poll the REST API. bmail ships no client, no MCP server, and no UI.
+- **Your own tools** poll the REST API. bmail ships no client and no UI.
 
 No database, no aliases, no bundled integrations. One Worker, one R2 bucket, one shared key.
 
@@ -358,6 +358,35 @@ The address must be URL encoded. `after` is the `next_cursor` from the previous 
 
 Parsing is your tool's job. The Worker stores and returns bytes; it does not parse MIME.
 
+## ARTEX custom tools
+
+The repository includes [`artex-custom-tools.json`](./artex-custom-tools.json), three HTTP custom tool definitions for ARTEX:
+
+- `bmail_list_messages`
+- `bmail_get_message`
+- `bmail_ack_message`
+
+To install them:
+
+1. Open `artex-custom-tools.json` and replace `YOUR_WORKER_URL` with the full `https://` Worker URL, and `YOUR_BMAIL_API_KEY` with the shared key.
+2. Feed the whole file into the ARTEX chat.
+3. Ask the ARTEX auto agent:
+
+   > Create these custom tools with `create_custom_tool`, bind them to my agent, and enable them.
+
+The `auto` agent has the `create_custom_tool` platform tool by default. If you use another agent, change `agents` in every tool entry before feeding the file.
+
+After creation, verify with a prompt such as:
+
+> Use bmail_list_messages for test@mail.example.com.
+
+Notes:
+
+- ARTEX HTTP tools make a single request. For waiting, call `bmail_list_messages` again with the previous `next_cursor` as `after`.
+- `bmail_get_message` returns raw MIME. Parse it in ARTEX or with another tool.
+- `bmail_ack_message` deletes the R2 copy. It is destructive; call it only after a successful read.
+- The API key is stored in the tool's Authorization header. ARTEX masks header values in its tool UI. If you do not want the key in the chat transcript, create the tools with a placeholder and set the header in the ARTEX UI afterward.
+
 ## Ack and lifecycle
 
 - `DELETE /v1/inbox/:address/:id` removes `mail/<address>/<id>.eml` immediately.
@@ -488,10 +517,11 @@ Check `Authorization: Bearer <bmail_api_key>`. The key must match the Worker sec
 ## Project layout
 
 ```text
-worker/     Cloudflare Worker: email() ingest and REST API
-scripts/    dev, deploy, and smoke helpers
-assets/     README banner
-llm-res/    agent rules, phase state, memory, threat model
+worker/                 Cloudflare Worker: email() ingest and REST API
+scripts/                dev, deploy, and smoke helpers
+assets/                 README banner
+artex-custom-tools.json  ARTEX HTTP custom tool definitions
+llm-res/                agent rules, phase state, memory, threat model
 ```
 
 ## Security notes
@@ -509,7 +539,7 @@ llm-res/    agent rules, phase state, memory, threat model
 
 - Inbound message size is capped by Cloudflare at 25 MiB.
 - `limit` is capped at 200 per list call.
-- There is no bundled client, MCP server, or UI.
+- There is no bundled client or UI.
 - There is no alias manager, outbound mail, or D1.
 
 ## License
