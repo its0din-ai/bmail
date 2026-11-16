@@ -14,7 +14,7 @@
 
 # bmail
 
-A tiny inbound email inbox for autonomous agents, built on the Cloudflare Free plan.
+Bounty Mail (bmail); A tiny inbound email inbox for autonomous agents, built on the Cloudflare Free plan; Giving an agent direct access to our mailboxes is very concerning. With bmail, an email could be routed to Cloudflare Workers and tells the Agent to poll for messages. Useful if testing for Registration Features that requires Email Access; Peoples are always lazy such as handling over the OTP to the Agents.
 
 - **Cloudflare Workers** receive mail and serve the REST API.
 - **Cloudflare Email Routing** handles MX, catch-all, and literal address rules.
