@@ -16,6 +16,7 @@ Format:
 
 ## Log
 
+- 2026-11-16T11:44:24Z | cleanup / mcp_removal | done | Removed the `client/` workspace, stdio MCP, HTTP MCP, OpenCode config, MCP deps, MCP docs/banner references, and t_14. The Worker is REST-only; custom tools come later. | client/**, package.json, pnpm-workspace.yaml, pnpm-lock.yaml, README.md, .env.example, assets/banner.svg, llm-res/*.md, vitest.config.ts | 17 tests, build 12.54 KiB
 - 2026-11-16T11:25:29Z | feat / http_mcp | done | Added Streamable HTTP MCP mode for ARTEX: Express server, bearer auth, in-memory sessions, JSON responses, optional CORS, loopback default. Refactored tools into `server.ts`. Tested two HTTP clients, list/get/ack, 401, and CORS. | client/src/http.ts, client/src/server.ts, client/src/mcp.ts, client/package.json, package.json, README.md, .env.example, llm-res/INIT.md, llm-res/PHASE.md, llm-res/THREAT.md | 20 tests, build pass
 - 2026-11-16T11:19:45Z | docs / mcp_deploy | done | Documented that the MCP server runs on the agent host, not Cloudflare; added the OpenCode V2 `mcp.servers` config, generic `mcpServers` config, pack/global install, and Inspector test. | README.md, llm-res/PHASE.md | no code change, fences balanced
 - 2026-11-16T11:05:09Z | fix / r2_stream_length | done | Production R2 rejected `message.raw` as an unknown-length stream. Ingest now wraps it in `FixedLengthStream(message.rawSize)` and awaits the pipe plus the put. Local smoke passes; documented the production-only failure. | worker/src/index.ts, README.md, llm-res/PHASE.md | 20 tests, smoke 10/10, bundle 12.54 KiB

@@ -8,7 +8,7 @@ Project initiation record (per `AGENTIC.md` section 0). Fill this **once, before
 
 - Project name: bmail (display name: bountyMail)
 - Project slug (snake_case, used for repo/directory/binary names): bmail
-- One-line description: Tiny inbound email inbox on Cloudflare Workers. Mail lands in R2, and an agent polls it over REST or MCP.
+- One-line description: Tiny inbound email inbox on Cloudflare Workers. Mail lands in R2, and your tool polls it over REST.
 - Distribution: public and self-hosted. No deployment-specific domain, address, account ID, or key is committed.
 - Hosting constraint: **Cloudflare Workers Free plan**. R2 is the only storage; no D1, Durable Objects, Queues, or KV.
 - App type: worker
@@ -17,14 +17,14 @@ Project initiation record (per `AGENTIC.md` section 0). Fill this **once, before
 
 ## Tech stack
 
-- Primary language + version: TypeScript (Cloudflare Workers runtime; Node.js 22+ for the MCP client and tooling)
+- Primary language + version: TypeScript (Cloudflare Workers runtime; Node.js 22+ for tooling)
 - Framework: Cloudflare Workers + Wrangler; native `fetch` router, no HTTP framework
-- Package manager: pnpm (workspace: `worker/` and `client/`)
+- Package manager: pnpm (workspace: `worker/`)
 - Runtime: Cloudflare Workers (V8 isolates) on the Workers Free plan
 - Database / storage: R2 only. One object per message under `mail/<address>/<timestamp>-<random>.eml`, plus one latest marker per address under `latest/<address>`
 - Auth mechanism: one shared bearer key, `bmail_api_key`, compared in constant time
-- Key third-party dependencies: Worker runtime: none. MCP client: `postal-mime`, `@modelcontextprotocol/sdk`, `zod`
-- Why this stack: Email Routing invokes a Worker directly, R2 stores raw MIME without a database, and the MCP client parses mail on the agent host so the Worker stays tiny.
+- Key third-party dependencies: Worker runtime: none. Tooling: TypeScript, Wrangler, Vitest.
+- Why this stack: Email Routing invokes a Worker directly, R2 stores raw MIME without a database, and your tool parses mail on its own host so the Worker stays tiny.
 - Configuration: `.env` is the source of truth. `pnpm dev` writes `worker/.dev.vars`; `pnpm deploy:worker` maps values to Worker vars and the secret.
 - Observability: Workers Logs enabled in `worker/wrangler.jsonc` with 100% sampling, invocation logs, and persistence. Workers Free includes 200,000 log events/day and 3-day retention. No message body or API key is logged by bmail.
 
@@ -44,8 +44,8 @@ Project initiation record (per `AGENTIC.md` section 0). Fill this **once, before
 ## Layout
 
 - Project root (absolute path): /home/enji/dev/ts/bmail
-- App/source directory: pnpm workspace with `worker/` and `client/`
-- Tests directory: `worker/test/` and `client/test/`
+- App/source directory: pnpm workspace with `worker/`
+- Tests directory: `worker/test/`
 - Config/secrets: `.env` (gitignored) and `.env.example` (committed placeholders)
 
 ## Commands (canonical verify commands)
@@ -58,7 +58,6 @@ Project initiation record (per `AGENTIC.md` section 0). Fill this **once, before
 - Run dev (bind 127.0.0.1 only): `pnpm dev`
 - Run prod: `pnpm deploy:worker`
 - Smoke test: `pnpm smoke` (requires a running Worker and `bmail_api_url`, `bmail_api_key`, `bmail_address`)
-- MCP server: `pnpm mcp` or `node client/dist/mcp.js`
 
 ## Environments & release
 
@@ -78,8 +77,8 @@ Project initiation record (per `AGENTIC.md` section 0). Fill this **once, before
 
 ## Scope
 
-- In scope for v1: `email()` R2 ingest, one REST list route, one REST raw route, one REST delete/ack route, an R2-backed stdio MCP server (`list_messages`, `get_message`, `ack_message`, `wait_for_message`), an HTTP MCP mode with the same tools, and the R2 lifecycle rule applied by the deploy script.
-- Out of scope: aliases, registration, D1, scheduled cleanup jobs (R2 lifecycle handles expiry), UI, outbound mail, Worker-hosted MCP (the HTTP mode is a Node process), rate limiting, full-text search.
+- In scope for v1: `email()` R2 ingest, one REST list route, one REST raw route, one REST delete/ack route, and the R2 lifecycle rule applied by the deploy script.
+- Out of scope: aliases, registration, D1, scheduled cleanup jobs (R2 lifecycle handles expiry), UI, outbound mail, bundled clients/MCP (custom tools later), rate limiting, full-text search.
 - Open questions:
   - Owner name
   - Deployment zone and R2 bucket name in the real `.env`

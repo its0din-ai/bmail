@@ -1,6 +1,5 @@
 packages:
   - worker
-  - client
 
 allowBuilds:
   esbuild: true

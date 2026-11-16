@@ -9,13 +9,11 @@
   },
   "scripts": {
     "build": "pnpm -r build",
-    "lint": "tsc -p worker/tsconfig.json --noEmit && tsc -p client/tsconfig.json --noEmit",
+    "lint": "tsc -p worker/tsconfig.json --noEmit",
     "test": "vitest run",
     "dev": "node scripts/dev.mjs",
     "deploy:worker": "node scripts/deploy.mjs",
-    "smoke": "node scripts/smoke.mjs",
-    "mcp": "node client/dist/mcp.js",
-    "mcp:http": "node client/dist/http.js"
+    "smoke": "node scripts/smoke.mjs"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

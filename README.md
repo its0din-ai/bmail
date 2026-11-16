@@ -6,7 +6,7 @@
   <img alt="Cloudflare Workers" src="https://img.shields.io/badge/Cloudflare-Workers-F38020?style=for-the-badge&amp;logo=cloudflare&amp;logoColor=white">
   <img alt="Cloudflare R2" src="https://img.shields.io/badge/Cloudflare-R2-F38020?style=for-the-badge&amp;logo=cloudflare&amp;logoColor=white">
   <img alt="Cloudflare Email Routing" src="https://img.shields.io/badge/Email-Routing-F38020?style=for-the-badge&amp;logo=cloudflare&amp;logoColor=white">
-  <img alt="MCP server" src="https://img.shields.io/badge/MCP-server-111111?style=for-the-badge">
+  <img alt="REST API" src="https://img.shields.io/badge/API-REST-111111?style=for-the-badge">
   <img alt="Free tier" src="https://img.shields.io/badge/Free%20tier-friendly-05E17A?style=for-the-badge">
 </p>
 
@@ -14,12 +14,12 @@
 
 A tiny inbound email inbox for autonomous agents, built on the Cloudflare Free plan.
 
-- **Cloudflare Workers** receive mail and serve the polling API.
+- **Cloudflare Workers** receive mail and serve the REST API.
 - **Cloudflare Email Routing** handles MX, catch-all, and literal address rules.
 - **Cloudflare R2** stores the raw message and a per-address latest marker.
-- **MCP** gives the agent `list_messages`, `get_message`, `ack_message`, and `wait_for_message`.
+- **Your own tools** poll the REST API. bmail ships no client, no MCP server, and no UI.
 
-No database, no UI, no aliases. One Worker, one R2 bucket, one shared key.
+No database, no aliases, no bundled integrations. One Worker, one R2 bucket, one shared key.
 
 ## Cloudflare products used
 
@@ -31,7 +31,6 @@ No database, no UI, no aliases. One Worker, one R2 bucket, one shared key.
 | **Cloudflare DNS** | Hosts the zone, MX records, and the domain used by Email Routing. | Included with the zone. |
 | **Wrangler** | Local dev, deploy, secret upload, and `r2 bucket lifecycle set`. | CLI. |
 | **Workers Logs** | Persisted invocation and custom logs, visible in the dashboard. | Free: 200,000 log events/day, 3-day retention. |
-| **Email Service activity log** | Optional observability: routing status, from, to, subject, message id, SPF/DKIM/DMARC. | Metadata only, about 31 days. It is not a mailbox and does not contain the message body. |
 
 **Not used, on purpose:** D1, KV, Durable Objects, Queues, Pages, Access, and Email Sending. The only state lives in R2.
 
@@ -51,9 +50,9 @@ No database, no UI, no aliases. One Worker, one R2 bucket, one shared key.
              Cloudflare R2
              mail/<address>/<id>.eml  +  latest/<address>
 
-   Agent (MCP) -- HTTPS + Bearer --> Cloudflare Worker  fetch()
-                                          |
-                                          +--> R2 head / list / get / delete
+   Your tool -- HTTPS + Bearer --> Cloudflare Worker  fetch()
+                                        |
+                                        +--> R2 head / list / get / delete
 ```
 
 ## Flow
@@ -61,10 +60,10 @@ No database, no UI, no aliases. One Worker, one R2 bucket, one shared key.
 1. Pick an address that matches the allowlist, for example `test@mail.example.com` or `bbounty@programs.example.net`.
 2. Cloudflare Email Routing delivers it to the Worker.
 3. The Worker stores the raw MIME in R2 and updates `latest/<address>`.
-4. The agent polls the REST API or MCP with the shared key.
-5. If a message exists, the agent reads the raw message and parses it locally.
-6. After a successful read, `ack_message` deletes the R2 copy. Your forwarded archive is unaffected.
-7. The R2 lifecycle rule deletes anything the agent did not ack after `bmail_lifecycle_days`.
+4. Your tool polls the REST API or a local email injection during development.
+5. It reads the raw message and parses it in your own code.
+6. After a successful read, `DELETE /v1/inbox/:address/:id` removes the R2 copy. Your forwarded archive is unaffected.
+7. The R2 lifecycle rule deletes anything that was not acknowledged after `bmail_lifecycle_days`.
 
 There is no registration step. The Worker accepts addresses that match its recipient allowlist.
 
@@ -93,9 +92,9 @@ Email Routing is the first gate. It decides which mail reaches the Worker:
 A common setup is one catch-all domain plus one fixed program address:
 
 ```text
-mail.example.com          catch-all -> bmail Worker
+mail.example.com               catch-all -> bmail Worker
 bbounty@programs.example.net   literal -> bmail Worker
-programs.example.net      catch-all -> personal inbox (archive)
+programs.example.net           catch-all -> personal inbox (archive)
 ```
 
 The literal rule wins over the catch-all, so only `bbounty@programs.example.net` reaches the Worker on that domain.
@@ -232,7 +231,7 @@ curl 'https://<worker-url>/v1/inbox/test%40mail.example.com' \
   -H "authorization: Bearer <bmail_api_key>"
 ```
 
-Use `https://<worker-url>` as `bmail_api_url` in the MCP config. The following values are only used by the CLI deploy script, so you can leave them out of the dashboard path: `bmail_lifecycle_days`, `cloudflare_worker_name`, `cloudflare_r2_bucket_name`, `cloudflare_account_id`.
+The following values are only used by the CLI deploy script, so you can leave them out of the dashboard path: `bmail_lifecycle_days`, `cloudflare_worker_name`, `cloudflare_r2_bucket_name`, `cloudflare_account_id`.
 
 ## Configuration
 
@@ -241,18 +240,14 @@ Use `https://<worker-url>` as `bmail_api_url` in the MCP config. The following v
 | Key | Used by | Purpose |
 |---|---|---|
 | `bmail_mail_domains` | Worker | Comma-separated allowlist. Domain entries accept any local part; full-address entries are exact. |
-| `bmail_api_key` | Worker and MCP | Shared bearer key, 16+ characters. |
+| `bmail_api_key` | Worker and smoke test | Shared bearer key, 16+ characters. |
 | `bmail_lifecycle_days` | CLI deploy | R2 expiry for `mail/` and `latest/`, default 7. The dashboard path sets these rules in the UI. |
 | `cloudflare_worker_name` | Deploy | Worker name. |
 | `cloudflare_r2_bucket_name` | Deploy | R2 bucket name. |
 | `cloudflare_account_id` | Deploy | Optional account id. |
-| `bmail_api_url` | MCP and smoke test | Worker base URL. |
-| `bmail_address` | MCP and smoke test | Optional default address for tools and the smoke test. |
+| `bmail_api_url` | Smoke test | Worker base URL. |
+| `bmail_address` | Smoke test | Optional default address. |
 | `bmail_local_email_url` | Smoke test | Optional local email injection base. Defaults to `bmail_api_url` when it is localhost. |
-| `bmail_http_host` | HTTP MCP | Bind address, default `127.0.0.1`. |
-| `bmail_http_port` | HTTP MCP | Listen port, default `8788`. |
-| `bmail_http_path` | HTTP MCP | Endpoint path, default `/mcp`. |
-| `bmail_cors_origin` | HTTP MCP | Optional browser origin allowed by CORS. |
 
 ## Local development
 
@@ -332,13 +327,6 @@ A deployed Worker cannot inject mail into Email Routing, so the real email is re
 8. Compute > Email Service > Email Routing > Activity log: the message shows `Handled` plus SPF, DKIM, and DMARC results.
 9. Wrong key returns `401`. An address outside the allowlist returns `403`.
 10. If you use an exact address entry, send to a different local part on that domain. It should be dropped and never appear in the list.
-11. MCP: run `list_messages`, `get_message`, `ack_message`, and `wait_for_message` from your agent, or use the Inspector:
-    ```bash
-    bmail_api_url=https://<worker-url> \
-    bmail_api_key=<your key> \
-    bmail_address=test@mail.example.com \
-    npx @modelcontextprotocol/inspector node client/dist/mcp.js
-    ```
 
 Example curl checks:
 
@@ -361,196 +349,18 @@ All `/v1` routes require `Authorization: Bearer <bmail_api_key>`.
 
 | Route | Purpose |
 |---|---|
-| `GET /health` | Liveness, no auth. |
+| `GET /health` | Liveness and readiness checks. |
 | `GET /v1/inbox/:address?after=<cursor>&limit=<n>` | List message metadata, paged with `next_cursor`. |
 | `GET /v1/inbox/:address/:id` | Raw RFC 5322 message. |
 | `DELETE /v1/inbox/:address/:id` | Acknowledge and delete the stored copy. |
 
 The address must be URL encoded. `after` is the `next_cursor` from the previous response. `limit` is 1 to 200, default 50. Delete is idempotent and returns `204`.
 
-## MCP server
-
-The MCP server runs on the agent host, not on Cloudflare. It is a stdio process that calls the deployed Worker over HTTPS. There is no port to open and nothing to deploy to Cloudflare.
-
-### Build it
-
-```bash
-pnpm install
-pnpm --filter bmail-mcp build
-```
-
-The entry point is `client/dist/mcp.js`.
-
-### Environment
-
-| Variable | Purpose |
-|---|---|
-| `bmail_api_url` | Worker URL, for example `https://bmail.example.workers.dev`. |
-| `bmail_api_key` | The same shared key used by the Worker. |
-| `bmail_address` | Optional default address for tools. |
-
-### OpenCode V2
-
-Add this to `~/.config/opencode/opencode.jsonc` for every project, or to a project `opencode.jsonc` / `.opencode/opencode.jsonc`:
-
-```jsonc
-{
-  "$schema": "https://opencode.ai/config.json",
-  "mcp": {
-    "servers": {
-      "bmail": {
-        "type": "local",
-        "command": ["node", "/absolute/path/to/bmail/client/dist/mcp.js"],
-        "environment": {
-          "bmail_api_url": "https://bmail.example.workers.dev",
-          "bmail_api_key": "{env:BMAIL_API_KEY}",
-          "bmail_address": "test@mail.example.com"
-        }
-      }
-    }
-  }
-}
-```
-
-Make `BMAIL_API_KEY` available in the environment that starts OpenCode:
-
-```bash
-export BMAIL_API_KEY='<shared key>'
-```
-
-If OpenCode is already running, restart the background service once so it inherits the new variable:
-
-```bash
-opencode service restart
-```
-
-Verify the connection:
-
-```bash
-opencode mcp list
-```
-
-Under the default Code Mode, tools are grouped as `tools.bmail.list_messages`, `tools.bmail.get_message`, and so on. Set `"codemode": false` on the server if you want direct `bmail_*` tool names.
-
-### Other MCP clients
-
-Most clients use the `mcpServers` shape:
-
-```json
-{
-  "mcpServers": {
-    "bmail": {
-      "command": "node",
-      "args": ["/absolute/path/to/bmail/client/dist/mcp.js"],
-      "env": {
-        "bmail_api_url": "https://bmail.example.workers.dev",
-        "bmail_api_key": "<shared key>",
-        "bmail_address": "test@mail.example.com"
-      }
-    }
-  }
-}
-```
-
-### Install it on another host
-
-If the agent runs on a different machine, either clone the repository there and run the build above, or install the packaged client:
-
-```bash
-pnpm --filter bmail-mcp pack
-# copy client/bmail-mcp-0.1.0.tgz to the agent host
-npm install -g ./bmail-mcp-0.1.0.tgz
-```
-
-Then use `bmail-mcp` as the command:
-
-```json
-{
-  "command": "bmail-mcp"
-}
-```
-
-Keep `BMAIL_API_KEY` in the client environment, not in a committed config file.
-
-### Test it without an agent
-
-```bash
-bmail_api_url=https://bmail.example.workers.dev \
-bmail_api_key=<shared key> \
-bmail_address=test@mail.example.com \
-npx @modelcontextprotocol/inspector node client/dist/mcp.js
-```
-
-The Inspector opens a local UI where you can run the tools.
-
-### HTTP mode for ARTEX and other remote clients
-
-The same tools can be served over MCP **Streamable HTTP**. This runs a Node process on the agent host, not on Cloudflare.
-
-```bash
-pnpm --filter bmail-mcp build
-
-bmail_api_url=https://bmail.example.workers.dev \
-bmail_api_key=<shared key> \
-bmail_address=test@mail.example.com \
-bmail_http_host=127.0.0.1 \
-bmail_http_port=8788 \
-node client/dist/http.js
-```
-
-Endpoint:
-
-```text
-http://127.0.0.1:8788/mcp
-```
-
-Authentication is the same shared key:
-
-```text
-Authorization: Bearer <bmail_api_key>
-```
-
-Point ARTEX at that URL and configure the header. If ARTEX only supports OAuth discovery and cannot send custom headers, this bearer endpoint is not enough; an OAuth layer would be needed.
-
-To expose it publicly, keep the process bound to `127.0.0.1` and put a TLS proxy or tunnel in front:
-
-```bash
-cloudflared tunnel --url http://127.0.0.1:8788
-```
-
-Use the resulting HTTPS URL plus `/mcp`. The Node process does not terminate TLS; the tunnel or reverse proxy does.
-
-If ARTEX is a browser application, set the CORS origin:
-
-```bash
-bmail_cors_origin=https://artex.example
-```
-
-HTTP MCP settings:
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `bmail_http_host` | `127.0.0.1` | Bind address. Keep this on loopback behind a proxy. |
-| `bmail_http_port` | `8788` | Listen port. |
-| `bmail_http_path` | `/mcp` | MCP endpoint path. |
-| `bmail_cors_origin` | empty | Allowed browser origin. |
-
-The HTTP server uses MCP Streamable HTTP with in-memory sessions and JSON responses, not long-lived SSE. The MCP client handles the `mcp-session-id` header automatically. Sessions are lost when the process restarts; clients reconnect. Anyone with `bmail_api_key` can read every allowed address, so do not expose the port directly to the internet.
-
-If you installed the client globally, `bmail-mcp-http` runs the same HTTP server. Locally, `pnpm mcp:http` is equivalent to `node client/dist/http.js`.
-
-Tools:
-
-- `list_messages` - metadata for an address, with an `after` cursor.
-- `get_message` - fetch raw mail and return subject, text, links, OTP candidates, and attachment metadata.
-- `ack_message` - delete the R2 copy after a successful read. The archive is unaffected.
-- `wait_for_message` - poll until a new message arrives, starting from now when `after` is omitted.
-
-Every tool accepts an `address` argument; it defaults to `bmail_address`. Message content is returned with `untrusted: true`, because the agent is reading attacker-controlled mail.
+Parsing is your tool's job. The Worker stores and returns bytes; it does not parse MIME.
 
 ## Ack and lifecycle
 
-- `ack_message` removes `mail/<address>/<id>.eml` immediately.
+- `DELETE /v1/inbox/:address/:id` removes `mail/<address>/<id>.eml` immediately.
 - The `latest/<address>` marker may still point at the deleted object. New mail updates it, so this is harmless.
 - `pnpm deploy:worker` sets two R2 lifecycle rules, `mail/` and `latest/`, each expiring after `bmail_lifecycle_days` (default 7).
 - The lifecycle command replaces the bucket's lifecycle configuration, so use a dedicated bucket or merge your own rules into the generated file.
@@ -560,7 +370,7 @@ Every tool accepts an `address` argument; it defaults to `bmail_address`. Messag
 | Operation | R2 class | When |
 |---|---|---|
 | Store a message | Class A | 2 per received email: the `.eml` plus the latest marker. |
-| Read a message | Class B | 1 per `get_message`. |
+| Read a message | Class B | 1 per raw read. |
 | Poll with a cursor and no new mail | Class B | 1 `head` per poll. |
 | Poll that finds new mail | Class B + A | 1 `head` plus 1 `list`. |
 | List without a cursor | Class A | First call only. |
@@ -568,7 +378,7 @@ Every tool accepts an `address` argument; it defaults to `bmail_address`. Messag
 
 A cursor poll does not call `ListObjects` unless the latest marker says something newer exists. That keeps polling cheap.
 
-The default poll interval is 5 seconds, with a 2-second minimum. At 5 seconds, one hour of waiting is 720 requests, or about 21,600 requests per month if you wait one hour per day. Workers Free includes 100,000 requests/day. R2 Free includes 1M Class A operations, 10M Class B operations, and 10 GB-month of storage.
+R2 Free includes 1M Class A operations, 10M Class B operations, and 10 GB-month of storage. Workers Free includes 100,000 requests/day. Your polling interval determines the request count; the Worker does not impose one.
 
 ## Observability
 
@@ -591,26 +401,6 @@ The default poll interval is 5 seconds, with a 2-second minimum. At 5 seconds, o
 - The Worker emits custom logs for `bmail: received`, `bmail: stored`, config problems, and R2 write failures. It does not log message bodies or the API key.
 - `wrangler tail bmail` still works for real-time logs and does not depend on the persistence setting.
 - The in-browser editor path does not read `wrangler.jsonc`. If you use that path, enable **Observability** in the Worker settings.
-
-## Project layout
-
-```text
-worker/     Cloudflare Worker: email() ingest and REST API
-client/     MCP server: REST client plus local MIME parsing
-scripts/    dev, deploy, and smoke helpers
-assets/     README banner
-llm-res/    agent rules, phase state, memory, threat model
-```
-
-## Security notes
-
-- One shared key grants access to every configured address. Rotate it by changing `bmail_api_key`.
-- Keys are compared in constant time and the key is never logged.
-- Addresses are validated before being used in an R2 key, so a local part cannot escape its prefix.
-- Only the first `Authentication-Results` header with `mx.cloudflare.net` as authserv-id is trusted for DMARC.
-- R2 is private. Only the Worker binding reads it.
-- MIME parsing happens in the MCP client, not in the Worker.
-- The forwarded personal archive is the source of truth. Ack only removes the R2 copy.
 
 ## Troubleshooting
 
@@ -695,12 +485,32 @@ A CLI deploy also passes `bmail_mail_domains` from `.env` with `--var`, so make 
 
 Check `Authorization: Bearer <bmail_api_key>`. The key must match the Worker secret exactly and be at least 16 characters.
 
+## Project layout
+
+```text
+worker/     Cloudflare Worker: email() ingest and REST API
+scripts/    dev, deploy, and smoke helpers
+assets/     README banner
+llm-res/    agent rules, phase state, memory, threat model
+```
+
+## Security notes
+
+- One shared key grants access to every configured address. Rotate it by changing `bmail_api_key`.
+- Keys are compared in constant time and the key is never logged.
+- Addresses are validated before being used in an R2 key, so a local part cannot escape its prefix.
+- Only the first `Authentication-Results` header with `mx.cloudflare.net` as authserv-id is trusted for DMARC.
+- R2 is private. Only the Worker binding reads it.
+- MIME parsing happens in your tool, not in the Worker.
+- The forwarded personal archive is the source of truth. Ack only removes the R2 copy.
+- There is no rate limiting. The Workers daily request cap is the backstop.
+
 ## Limits
 
 - Inbound message size is capped by Cloudflare at 25 MiB.
 - `limit` is capped at 200 per list call.
-- There is no rate limiting. The Workers daily request cap is the backstop.
-- There is no UI, no alias manager, no outbound mail, and no D1.
+- There is no bundled client, MCP server, or UI.
+- There is no alias manager, outbound mail, or D1.
 
 ## License
 

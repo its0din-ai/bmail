@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="360" viewBox="0 0 1280 360" role="img" aria-labelledby="bmail-banner-title bmail-banner-desc">
   <title id="bmail-banner-title">bmail - inbound email for agents on Cloudflare Workers and R2</title>
-  <desc id="bmail-banner-desc">Minimal banner. bmail runs on Cloudflare Workers, receives mail through Email Routing, stores it in R2, and exposes an MCP polling interface.</desc>
+  <desc id="bmail-banner-desc">Minimal banner. bmail runs on Cloudflare Workers, receives mail through Email Routing, stores it in R2, and exposes a REST API for your own tools.</desc>
 
   <rect width="1280" height="360" fill="#F7F7F5"/>
   <rect x="0" y="0" width="1280" height="2" fill="#F38020"/>
@@ -36,7 +36,7 @@
       <text x="1084" y="170" font-size="10" letter-spacing="1.5" fill="#9A9A94">STORAGE</text>
 
       <circle cx="910" cy="241" r="3" fill="#8A8A85"/>
-      <text x="924" y="246" font-size="15" font-weight="500" fill="#111111">MCP</text>
+      <text x="924" y="246" font-size="15" font-weight="500" fill="#111111">Your tool</text>
       <text x="924" y="266" font-size="10" letter-spacing="1.5" fill="#9A9A94">AGENT</text>
 
       <line x1="916" y1="230" x2="916" y2="186" stroke="#C9C9C3" stroke-width="1.5" stroke-dasharray="3 4"/>
