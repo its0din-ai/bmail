@@ -45,7 +45,11 @@ export class BmailClient {
     this.base = options.api_url.replace(/\/+$/, "");
   }
 
-  private async request(path: string, query: Record<string, string | number | undefined> = {}): Promise<Response> {
+  private async request(
+    path: string,
+    query: Record<string, string | number | undefined> = {},
+    method = "GET",
+  ): Promise<Response> {
     const url = new URL(`${this.base}${path}`);
     for (const [key, value] of Object.entries(query)) {
       if (value !== undefined && value !== "") {
@@ -54,6 +58,7 @@ export class BmailClient {
     }
 
     const response = await fetch(url, {
+      method,
       headers: {
         accept: "application/json",
         authorization: `Bearer ${this.options.api_key}`,
@@ -94,5 +99,13 @@ export class BmailClient {
       `/v1/inbox/${encodeURIComponent(address)}/${encodeURIComponent(id)}`,
     );
     return response.arrayBuffer();
+  }
+
+  async deleteMessage(address: string, id: string): Promise<void> {
+    await this.request(
+      `/v1/inbox/${encodeURIComponent(address)}/${encodeURIComponent(id)}`,
+      {},
+      "DELETE",
+    );
   }
 }

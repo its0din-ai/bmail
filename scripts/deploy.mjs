@@ -37,6 +37,12 @@ if (env.bmail_api_key.length < 16) {
 if (!env.cloudflare_r2_bucket_name) {
   throw new Error("cloudflare_r2_bucket_name is required");
 }
+const lifecycleDays = env.bmail_lifecycle_days
+  ? Number(env.bmail_lifecycle_days)
+  : 7;
+if (!Number.isInteger(lifecycleDays) || lifecycleDays < 1 || lifecycleDays > 3650) {
+  throw new Error("bmail_lifecycle_days must be an integer from 1 to 3650");
+}
 
 const config = JSON.parse(readFileSync("worker/wrangler.jsonc", "utf8"));
 if (env.cloudflare_worker_name) config.name = env.cloudflare_worker_name;
@@ -77,6 +83,60 @@ if (!dryRun) {
   if (secret.status !== 0) {
     rmSync(generated, { force: true });
     process.exit(secret.status ?? 1);
+  }
+}
+
+if (!dryRun) {
+  const lifecycleFile = "worker/lifecycle.json";
+  const maxAge = lifecycleDays * 24 * 60 * 60;
+  writeFileSync(
+    lifecycleFile,
+    `${JSON.stringify(
+      {
+        rules: [
+          {
+            id: "bmail-expire-mail",
+            conditions: { prefix: "mail/" },
+            enabled: true,
+            deleteObjectsTransition: {
+              condition: { type: "Age", maxAge },
+            },
+          },
+          {
+            id: "bmail-expire-latest",
+            conditions: { prefix: "latest/" },
+            enabled: true,
+            deleteObjectsTransition: {
+              condition: { type: "Age", maxAge },
+            },
+          },
+        ],
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  const lifecycle = spawnSync(
+    "wrangler",
+    [
+      "r2",
+      "bucket",
+      "lifecycle",
+      "set",
+      env.cloudflare_r2_bucket_name,
+      "--file",
+      "lifecycle.json",
+      "--force",
+    ],
+    { cwd: "worker", stdio: "inherit" },
+  );
+  rmSync(lifecycleFile, { force: true });
+  if (lifecycle.status !== 0) {
+    rmSync(generated, { force: true });
+    process.stderr.write(
+      `bmail: worker deployed, but the R2 lifecycle rule failed. Set it manually or fix permissions.\n`,
+    );
+    process.exit(lifecycle.status ?? 1);
   }
 }
 

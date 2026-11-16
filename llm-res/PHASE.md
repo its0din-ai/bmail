@@ -18,7 +18,7 @@ Seed these from `INIT.md`, fill them in on session start, and confirm with `pwd`
 - Active phase: simplified v0.1.0 complete and verified locally.
 - Hosting: **Cloudflare Workers Free plan**. R2 is the only storage.
 - Current version (SemVer, per AGENTIC.md section 11): **0.1.0**. Not deployed, not tagged.
-- Micro-task just finished: replaced the D1/alias/retention design with an R2-backed inbox, REST polling, and a three-tool MCP server.
+- Micro-task just finished: added `ack_message` and `DELETE /v1/inbox/:address/:id` for delete-after-read, plus an R2 lifecycle rule for `mail/` and `latest/`.
 - Next micro-task: deploy. Create the R2 bucket, fill `.env`, run `pnpm deploy`, configure Email Routing, then tag `v0.1.0-{commit}`.
 - Current blockers: Cloudflare credentials and the real R2 bucket, final owner name.
 
@@ -33,9 +33,9 @@ Commands that prove the current state builds, lints, and tests clean:
 - Run: `pnpm dev` (127.0.0.1:8787)
 - MCP: `pnpm mcp`
 
-Last verified result: lint clean, 14 tests passing, Worker bundle 9.37 KiB (gzip 3.15 KiB).
+Last verified result: lint clean, 14 tests passing, Worker bundle 9.86 KiB (gzip 3.22 KiB).
 
-Local end-to-end check: delivered mail to two configured domains, listed metadata, fetched raw MIME, rejected a bad key with 401, rejected an unconfigured domain with 403, exercised all three MCP tools including `wait_for_message` with a delayed delivery, and verified that a cursor poll returns empty until the latest marker changes.
+Local end-to-end check: delivered mail to two configured domains, listed metadata, fetched raw MIME, rejected a bad key with 401, rejected an unconfigured domain with 403, exercised all four MCP tools including `wait_for_message` with a delayed delivery, verified that a cursor poll returns empty until the latest marker changes, and verified that `ack_message` removes the object and makes the raw read return 404.
 
 ## Phase log
 
@@ -50,7 +50,7 @@ Local end-to-end check: delivered mail to two configured domains, listed metadat
 ## Decisions & notes
 
 - **Flow.** Pick any address on a configured domain, for example `test@mail.example.com`. There is no registration and no alias table. The agent polls that address with the shared key.
-- **Storage.** One R2 object per message at `mail/<address>/<id>.eml`, where `id` is `<13-digit ms>-<12 hex>`, plus one small latest marker per address at `latest/<address>`. The timestamp prefix makes lexicographic order chronological. Nothing deletes objects automatically.
+- **Storage.** One R2 object per message at `mail/<address>/<id>.eml`, where `id` is `<13-digit ms>-<12 hex>`, plus one small latest marker per address at `latest/<address>`. The timestamp prefix makes lexicographic order chronological. Ack deletes the message object; a lifecycle rule expires both prefixes after `bmail_lifecycle_days`.
 - **Metadata.** R2 custom metadata stores `from`, an ASCII-safe `subject` preview, `received_at`, `size`, and `dmarc`. The real subject and body are parsed from the raw message by the MCP client, so non-ASCII subjects are preserved there.
 - **Paging.** `GET /v1/inbox/:address?after=<key>&limit=<n>` uses R2 `startAfter`; `next_cursor` is the last object key. Messages are ascending by id.
 - **Latest marker.** Ingest writes `latest/<address>` with the last message key after writing the message. A cursor poll first does `head` on that marker: if the marker is not newer than `after`, it returns empty without `ListObjects`. This keeps polls on R2 Class B and saves Class A for actual new mail.
@@ -61,9 +61,10 @@ Local end-to-end check: delivered mail to two configured domains, listed metadat
 - **Validation.** Local parts are restricted to `[a-z0-9._+-]` with no slashes, so an address cannot escape its R2 prefix. Message ids must match `<13 digits>-<12 lowercase alnum>`.
 - **DMARC trust.** Follow the docs: read only the first `Authentication-Results` header, require `mx.cloudflare.net` as its authserv-id, then store its dmarc result. A sender-supplied header that merely mentions Cloudflare is ignored. Tested in `worker/test/index.test.ts`.
 - **MCP.** The server runs on the agent host over stdio and calls the REST API. `postal-mime` parses raw mail locally. `wait_for_message` starts at the current millisecond when `after` is omitted.
-- **No retention.** The operator can add an R2 lifecycle rule if needed. This is a deliberate deferral, not a missing job.
+- **Deletion.** `DELETE /v1/inbox/:address/:id` deletes the `.eml` object and returns 204, including when the object is already gone. The MCP `ack_message` wraps it. The latest marker may point at a deleted object; that is harmless because new mail updates it. The owner's forwarded archive is untouched.
+- **Lifecycle.** `pnpm deploy` sets an R2 lifecycle configuration with two rules: `mail/` and `latest/`, each deleting objects after `bmail_lifecycle_days` (default 7 days, `maxAge` in seconds). It uses `wrangler r2 bucket lifecycle set --file`, which replaces the bucket's lifecycle rules, so the bucket should be dedicated to bmail.
 - **No D1, no cron, no Durable Objects, no Queues, no KV.** R2 only.
-- **Free plan.** Ingest is one R2 put; listing is one R2 list; raw reads are one R2 get. The daily request cap and R2 free quota are the backstops.
+- **Free plan.** Ingest is two R2 Class A puts (message plus marker); listing is one list; raw reads are one get; ack is a free delete. The daily request cap and R2 free quota are the backstops.
 - **Config path.** `.env` is the source of truth. `scripts/dev.mjs` writes `worker/.dev.vars`; `scripts/deploy.mjs` generates a temporary Wrangler config, deploys `bmail_mail_domains` as a var, and sets `bmail_api_key` as a secret.
 - **Local Email Routing test.** `POST /cdn-cgi/handler/email?from=...&to=...`.
 - **Compatibility date.** `2026-03-12`, the maximum supported by the installed workerd. No newer runtime feature is used.
@@ -75,15 +76,16 @@ Local end-to-end check: delivered mail to two configured domains, listed metadat
 - `GET /health`
 - `GET /v1/inbox/:address?after=<cursor>&limit=<n>`
 - `GET /v1/inbox/:address/:id`
+- `DELETE /v1/inbox/:address/:id`
 
 ## MCP tools (v1)
 
-`list_messages`, `get_message`, `wait_for_message`.
+`list_messages`, `get_message`, `ack_message`, `wait_for_message`.
 
 ## Out of scope
 
 - Aliases, registration, and per-address keys
-- D1, retention cleanup, and deletion endpoints
+- D1 and scheduled cleanup jobs (R2 lifecycle handles expiry)
 - Admin UI (Neo Brutalism applies if it is ever built)
 - Outbound mail, replies, and forwarding
 - Worker-hosted MCP and OAuth

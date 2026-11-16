@@ -118,6 +118,35 @@ export async function startMcpServer(
   );
 
   server.registerTool(
+    "ack_message",
+    {
+      title: "Acknowledge message",
+      description:
+        "Delete the R2 copy after a successful read. The owner's archived copy is unaffected. Idempotent.",
+      inputSchema: {
+        address: z
+          .string()
+          .optional()
+          .describe("Recipient address. Defaults to bmail_address when set."),
+        message_id: z.string().min(1),
+      },
+    },
+    async (args) => {
+      try {
+        const address = resolveAddress(args.address);
+        await client.deleteMessage(address, args.message_id);
+        return text({
+          acknowledged: true,
+          address,
+          message_id: args.message_id,
+        });
+      } catch (error) {
+        return errorResult(error);
+      }
+    },
+  );
+
+  server.registerTool(
     "wait_for_message",
     {
       title: "Wait for message",

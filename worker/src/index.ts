@@ -213,6 +213,18 @@ async function handleRaw(
   return new Response(object.body, { headers });
 }
 
+async function handleAck(
+  env: Env,
+  address: string,
+  id: string,
+): Promise<Response> {
+  if (!MESSAGE_ID_RE.test(id)) {
+    return fail("not_found", "Message not found", 404);
+  }
+  await env.MAIL.delete(messageKey(address, id));
+  return new Response(null, { status: 204 });
+}
+
 async function handleFetch(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   if (request.method === "GET" && url.pathname === "/health") {
@@ -240,7 +252,6 @@ async function handleFetch(request: Request, env: Env): Promise<Response> {
 
   const segments = url.pathname.split("/").filter(Boolean);
   if (
-    request.method !== "GET" ||
     segments[0] !== "v1" ||
     segments[1] !== "inbox" ||
     (segments.length !== 3 && segments.length !== 4)
@@ -260,11 +271,16 @@ async function handleFetch(request: Request, env: Env): Promise<Response> {
     return fail("invalid_address", "Address is not allowed", 403);
   }
 
-  if (segments.length === 3) {
+  if (segments.length === 3 && request.method === "GET") {
     return handleList(url, env, address);
   }
-
-  return handleRaw(env, address, segments[3] ?? "");
+  if (segments.length === 4 && request.method === "GET") {
+    return handleRaw(env, address, segments[3] ?? "");
+  }
+  if (segments.length === 4 && request.method === "DELETE") {
+    return handleAck(env, address, segments[3] ?? "");
+  }
+  return fail("not_found", "Not found", 404);
 }
 
 async function handleEmail(

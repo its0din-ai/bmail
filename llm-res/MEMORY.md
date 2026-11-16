@@ -16,6 +16,7 @@ Format:
 
 ## Log
 
+- 2026-11-16T09:58:25Z | phase_06 / ack_lifecycle | done | Added idempotent `DELETE /v1/inbox/:address/:id` and MCP `ack_message` to delete after a successful read; deploy now sets R2 lifecycle rules for `mail/` and `latest/` after `bmail_lifecycle_days` (default 7). Verified ack 204, raw 404, MCP ack, and deploy dry run. | worker/src/index.ts, client/src/api.ts, client/src/mcp.ts, scripts/deploy.mjs, .env.example, README.md, llm-res/*.md | lint clean, 14 tests, bundle 9.86 KiB
 - 2026-11-16T09:52:37Z | phase_05 / poll_floor | done | Set the MCP wait interval minimum to 2 seconds to cap continuous request and R2 head volume; default stays 5 seconds. | client/src/mcp.ts, README.md, llm-res/PHASE.md, llm-res/THREAT.md | 14 tests pass
 - 2026-11-16T09:52:09Z | phase_05 / r2_free_tier | done | Added a `latest/<address>` marker so a cursor poll is one `head` (R2 Class B) and `ListObjects` (Class A) runs only when new mail exists; raised the MCP wait interval default to 5s; documented the free-tier operation budget. Verified no-new poll, first-mail, and wait paths. | worker/src/index.ts, client/src/mcp.ts, README.md, llm-res/PHASE.md, llm-res/THREAT.md | lint clean, 14 tests, bundle 9.37 KiB
 - 2026-11-16T09:42:37Z | phase_04 / dmarc_docs_alignment | done | Changed `readDmarc` to trust only the first `Authentication-Results` header with `mx.cloudflare.net` as authserv-id, matching the Cloudflare docs, and added forged-header tests. | worker/src/index.ts, worker/test/index.test.ts, llm-res/THREAT.md, llm-res/PHASE.md | 14 tests pass

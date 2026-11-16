@@ -63,7 +63,7 @@ Project initiation record (per `AGENTIC.md` section 0). Fill this **once, before
 - Environments (dev/staging/prod): local dev + production Worker per self-hosted deployment
 - Mail domains: **not in code**. `bmail_mail_domains` is a comma-separated list. Any address on a configured domain is accepted.
 - Deploy target / mechanism: Cloudflare Workers via Wrangler, Free plan, deployed by tag
-- Retention: none. R2 keeps messages until the operator deletes them or adds an R2 lifecycle rule.
+- Retention: `ack_message` deletes the copy immediately after a successful read. `bmail_lifecycle_days` (default 7) sets an R2 lifecycle rule for `mail/` and `latest/` as a safety net.
 
 ## Security
 
@@ -72,12 +72,12 @@ Project initiation record (per `AGENTIC.md` section 0). Fill this **once, before
 - Data handled: raw email, OTPs, verification links = confidential; addresses = internal; `bmail_api_key` = secret.
 - Trust boundaries: internet mail -> Email Routing -> Worker `email()`; agent -> public HTTPS API; Worker -> R2.
 - Controls: constant-time key comparison, strict address validation before building R2 keys, 25 MiB platform size cap, no body logging, raw parsing only on the agent host.
-- No retention and no rate limiting: storage growth and request volume are operator concerns, documented in `THREAT.md`.
+- No rate limiting: request volume is an operator concern, documented in `THREAT.md`. Deletion is explicit (`ack_message`) with an R2 lifecycle rule as a fallback.
 
 ## Scope
 
-- In scope for v1: `email()` R2 ingest, one REST list route, one REST raw route, one stdio MCP server with `list_messages`, `get_message`, `wait_for_message`.
-- Out of scope: aliases, registration, D1, retention cleanup, UI, outbound mail, Worker-hosted MCP, rate limiting, full-text search.
+- In scope for v1: `email()` R2 ingest, one REST list route, one REST raw route, one REST delete/ack route, one stdio MCP server with `list_messages`, `get_message`, `ack_message`, `wait_for_message`, and the R2 lifecycle rule applied by the deploy script.
+- Out of scope: aliases, registration, D1, scheduled cleanup jobs (R2 lifecycle handles expiry), UI, outbound mail, Worker-hosted MCP, rate limiting, full-text search.
 - Open questions:
   - Owner name
   - Deployment zone and R2 bucket name in the real `.env`
