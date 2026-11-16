@@ -50,6 +50,7 @@ Local end-to-end check: delivered mail to two configured domains, listed metadat
 | phase_06 | recipient allowlist | done | Domain entries accept any local part; full-address entries are exact |
 | docs | README + banner | done | Cloudflare product map, architecture, config, API, MCP, free-tier budget |
 | docs | dashboard deploy | done | In-browser editor and Git flow, bindings, lifecycle rules, Email Routing |
+| docs | env example | done | Marked lifecycle and cloudflare keys as CLI deploy only |
 
 ## Decisions & notes
 

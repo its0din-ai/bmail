@@ -235,7 +235,7 @@ Use `https://<worker-url>` as `bmail_api_url` in the MCP config. The following v
 |---|---|---|
 | `bmail_mail_domains` | Worker | Comma-separated allowlist. Domain entries accept any local part; full-address entries are exact. |
 | `bmail_api_key` | Worker and MCP | Shared bearer key, 16+ characters. |
-| `bmail_lifecycle_days` | Deploy | R2 expiry for `mail/` and `latest/`, default 7. |
+| `bmail_lifecycle_days` | CLI deploy | R2 expiry for `mail/` and `latest/`, default 7. The dashboard path sets these rules in the UI. |
 | `cloudflare_worker_name` | Deploy | Worker name. |
 | `cloudflare_r2_bucket_name` | Deploy | R2 bucket name. |
 | `cloudflare_account_id` | Deploy | Optional account id. |
