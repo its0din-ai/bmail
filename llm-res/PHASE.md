@@ -33,9 +33,9 @@ Commands that prove the current state builds, lints, and tests clean:
 - Run: `pnpm dev` (127.0.0.1:8787)
 - MCP: `pnpm mcp`
 
-Last verified result: lint clean, 11 tests passing, Worker bundle 8.78 KiB (gzip 3.00 KiB).
+Last verified result: lint clean, 14 tests passing, Worker bundle 9.37 KiB (gzip 3.15 KiB).
 
-Local end-to-end check: delivered mail to two configured domains, listed metadata, fetched raw MIME, rejected a bad key with 401, rejected an unconfigured domain with 403, and exercised all three MCP tools including `wait_for_message` with a delayed delivery.
+Local end-to-end check: delivered mail to two configured domains, listed metadata, fetched raw MIME, rejected a bad key with 401, rejected an unconfigured domain with 403, exercised all three MCP tools including `wait_for_message` with a delayed delivery, and verified that a cursor poll returns empty until the latest marker changes.
 
 ## Phase log
 
@@ -50,9 +50,11 @@ Local end-to-end check: delivered mail to two configured domains, listed metadat
 ## Decisions & notes
 
 - **Flow.** Pick any address on a configured domain, for example `test@mail.example.com`. There is no registration and no alias table. The agent polls that address with the shared key.
-- **Storage.** One R2 object per message at `mail/<address>/<id>.eml`, where `id` is `<13-digit ms>-<12 hex>`. The timestamp prefix makes lexicographic order chronological. Nothing deletes objects automatically.
+- **Storage.** One R2 object per message at `mail/<address>/<id>.eml`, where `id` is `<13-digit ms>-<12 hex>`, plus one small latest marker per address at `latest/<address>`. The timestamp prefix makes lexicographic order chronological. Nothing deletes objects automatically.
 - **Metadata.** R2 custom metadata stores `from`, an ASCII-safe `subject` preview, `received_at`, `size`, and `dmarc`. The real subject and body are parsed from the raw message by the MCP client, so non-ASCII subjects are preserved there.
 - **Paging.** `GET /v1/inbox/:address?after=<key>&limit=<n>` uses R2 `startAfter`; `next_cursor` is the last object key. Messages are ascending by id.
+- **Latest marker.** Ingest writes `latest/<address>` with the last message key after writing the message. A cursor poll first does `head` on that marker: if the marker is not newer than `after`, it returns empty without `ListObjects`. This keeps polls on R2 Class B and saves Class A for actual new mail.
+- **Polling cost.** One cursor poll with no new mail is one `head` (Class B). A poll that finds new mail is one `head` plus one `list` (Class A). The MCP `wait_for_message` default interval is 5 seconds.
 - **Raw access.** `GET /v1/inbox/:address/:id` streams the R2 object as `message/rfc822` with `x-bmail-*` metadata headers.
 - **Auth.** One shared `bmail_api_key`, at least 16 characters, sent as `Authorization: Bearer`. Constant-time compare. The key grants access to every configured address. Health is unauthenticated.
 - **Domains.** `bmail_mail_domains` is a comma-separated allowlist. Addresses outside it return 403. No mode setting: any local part is accepted, and a literal Email Routing rule works the same as a catch-all.

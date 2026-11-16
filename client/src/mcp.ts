@@ -122,7 +122,7 @@ export async function startMcpServer(
     {
       title: "Wait for message",
       description:
-        "Poll until a new message arrives, then return it parsed. Starts from now when after is omitted; call list_messages first if you need older mail.",
+        "Poll until a new message arrives, then return it parsed. Starts from now when after is omitted; call list_messages first if you need older mail. Default interval is 5 seconds.",
       inputSchema: {
         address: z
           .string()
@@ -137,7 +137,7 @@ export async function startMcpServer(
       try {
         const address = resolveAddress(args.address);
         const timeout = clamp(args.timeout_seconds ?? 30, 1, 120);
-        const interval = clamp(args.interval_seconds ?? 2, 1, 30);
+        const interval = clamp(args.interval_seconds ?? 5, 1, 30);
         let cursor = args.after ?? `mail/${address}/${Date.now()}`;
         const deadline = Date.now() + timeout * 1000;
 

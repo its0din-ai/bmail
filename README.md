@@ -107,6 +107,24 @@ Tools:
 
 Every tool accepts an `address` argument; it defaults to `bmail_address`. Message content is returned with `untrusted: true`.
 
+## Free plan budget
+
+The design is sized for the Workers Free and R2 Free tiers.
+
+| operation | R2 class | when |
+|---|---|---|
+| store a message | Class A | 2 per received email (message plus latest marker) |
+| read a message | Class B | 1 per `get_message` |
+| poll with a cursor and no new mail | Class B | 1 `head` per poll |
+| poll that finds new mail | Class B + A | 1 `head` plus 1 `list` |
+| list without a cursor | Class A | first call only |
+
+A cursor poll does not call `ListObjects` unless the latest marker says something newer exists. That keeps polling cheap.
+
+At a 5-second poll interval, one hour of waiting is 720 requests. That is about 21,600 requests per month if you wait one hour per day. R2 Free includes 1M Class A operations, 10M Class B operations, and 10 GB-month of storage. The Workers Free plan includes 100,000 requests per day.
+
+Storage is the only unbounded part because there is no retention. If you want a hard cap, add an R2 lifecycle rule, for example delete objects under `mail/` after 7 or 30 days.
+
 ## Notes
 
 - One shared key grants access to every configured address.

@@ -21,7 +21,7 @@ Project initiation record (per `AGENTIC.md` section 0). Fill this **once, before
 - Framework: Cloudflare Workers + Wrangler; native `fetch` router, no HTTP framework
 - Package manager: pnpm (workspace: `worker/` and `client/`)
 - Runtime: Cloudflare Workers (V8 isolates) on the Workers Free plan
-- Database / storage: R2 only. One object per message under `mail/<address>/<timestamp>-<random>.eml`
+- Database / storage: R2 only. One object per message under `mail/<address>/<timestamp>-<random>.eml`, plus one latest marker per address under `latest/<address>`
 - Auth mechanism: one shared bearer key, `bmail_api_key`, compared in constant time
 - Key third-party dependencies: Worker runtime: none. MCP client: `postal-mime`, `@modelcontextprotocol/sdk`, `zod`
 - Why this stack: Email Routing invokes a Worker directly, R2 stores raw MIME without a database, and the MCP client parses mail on the agent host so the Worker stays tiny.

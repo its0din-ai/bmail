@@ -88,6 +88,10 @@ function messageKey(address: string, id: string): string {
   return `${messagePrefix(address)}${id}.eml`;
 }
 
+function latestKey(address: string): string {
+  return `latest/${address}`;
+}
+
 function newMessageId(): string {
   const random = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
   return `${Date.now()}-${random}`;
@@ -137,9 +141,18 @@ async function handleList(
   }
 
   const prefix = messagePrefix(address);
-  const after = requestUrl.searchParams.get("after") ?? undefined;
+  const after = requestUrl.searchParams.get("after") || undefined;
   if (after && !after.startsWith(prefix)) {
     return fail("invalid_cursor", "after does not belong to this address", 400);
+  }
+
+  // A cursor poll is one HeadObject (Class B). ListObjects is Class A, so only
+  // list when the marker says something newer exists. A missing marker means
+  // this address has received nothing yet.
+  const latest = await env.MAIL.head(latestKey(address));
+  const latestMessageKey = latest?.customMetadata?.key ?? null;
+  if (after && (!latestMessageKey || latestMessageKey <= after)) {
+    return json({ address, messages: [], next_cursor: after });
   }
 
   const listed = await env.MAIL.list({
@@ -168,6 +181,7 @@ async function handleList(
     next_cursor:
       messages.at(-1)?.key ??
       listed.objects.at(-1)?.key ??
+      latestMessageKey ??
       after ??
       null,
   });
@@ -279,15 +293,28 @@ async function handleEmail(
   }
 
   const id = newMessageId();
-  await env.MAIL.put(messageKey(address, id), message.raw, {
+  const receivedAt = new Date().toISOString();
+  const key = messageKey(address, id);
+  await env.MAIL.put(key, message.raw, {
     customMetadata: {
       from: asciiPreview(message.from.trim().toLowerCase(), 320),
       subject: asciiPreview(message.headers.get("subject") ?? "", 200),
-      received_at: new Date().toISOString(),
+      received_at: receivedAt,
       size: String(message.rawSize),
       dmarc: readDmarc(message.headers),
     },
   });
+
+  try {
+    await env.MAIL.put(latestKey(address), "", {
+      customMetadata: { id, key, received_at: receivedAt },
+    });
+  } catch (error) {
+    // Keep the marker and the message consistent. A missing marker would make
+    // a cursor poll skip the message.
+    await env.MAIL.delete(key);
+    throw error;
+  }
 }
 
 export default {
