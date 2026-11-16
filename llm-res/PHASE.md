@@ -48,6 +48,7 @@ Local end-to-end check: delivered mail to two configured domains, listed metadat
 | phase_04 | verification | done | Lint, 14 tests, build, local end-to-end |
 | phase_05 | ack + lifecycle | done | Idempotent delete and R2 lifecycle rules for `mail/` and `latest/` |
 | docs | README + banner | done | Cloudflare product map, architecture, config, API, MCP, free-tier budget |
+| docs | dashboard deploy | done | In-browser editor and Git flow, bindings, lifecycle rules, Email Routing |
 
 ## Decisions & notes
 

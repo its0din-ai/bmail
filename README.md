@@ -92,7 +92,110 @@ Then in the Cloudflare dashboard:
 1. Enable Email Routing on each domain in `bmail_mail_domains`.
 2. For a catch-all domain, set the catch-all action to the `bmail` Worker.
 3. For a single address, create one literal routing rule to the `bmail` Worker.
-4. If you want an archive, add a forward rule to your personal inbox. bmail does not create or manage that rule.
+4. If you want a personal archive, do not give the same rule two actions. Either use a literal rule for the agent address and leave the catch-all forwarding to your inbox, or run bmail on a separate subdomain with its own catch-all.
+
+## Deploy with the Cloudflare dashboard
+
+Use this path if you want to create and configure the Worker in the Cloudflare web UI. The in-browser editor path uses the bundled `worker/dist/index.js`, which you build locally with `pnpm build`. The Git-based flow builds from source in Cloudflare.
+
+The in-browser editor does not read `wrangler.jsonc` and does not run `scripts/deploy.mjs`, so bindings, variables, and the R2 lifecycle rules are set by hand. The Git flow uses `wrangler.jsonc` for the Worker name, entry point, and R2 binding; variables and lifecycle rules are still manual.
+
+| Path | Config source | Lifecycle rule |
+|---|---|---|
+| CLI (`pnpm deploy`) | `.env` and `wrangler.jsonc` | Applied by the script. |
+| Dashboard editor | UI bindings and variables | Added manually in R2 settings. |
+| Dashboard Git | `wrangler.jsonc` plus UI variables | Added manually in R2 settings. |
+
+### 1. Create the R2 bucket
+
+1. Cloudflare dashboard > **R2 object storage** > **Create bucket**.
+2. Name it, for example `bmail-mail`, and create it.
+
+### 2. Create the Worker
+
+1. **Workers & Pages** > **Create application**.
+2. Choose the in-browser Worker or Hello World option if your account shows it.
+3. Name it `bmail` and deploy.
+4. Open the Worker and select **Edit code** (some accounts label this **Quick Edit**).
+
+If your account only shows the Git-based **Create application** flow, use that instead:
+
+1. Push this repository to GitHub or GitLab.
+2. Connect it in **Workers & Pages** > **Create application**.
+3. Root directory: the repository root.
+4. Build command: `pnpm install`.
+5. Deploy command: `npx wrangler deploy --config worker/wrangler.jsonc`.
+6. Create the R2 bucket with the name in `worker/wrangler.jsonc` (`bmail-mail`), or edit that file before pushing.
+7. Add `bmail_mail_domains` and `bmail_api_key` in the dashboard as described in step 4 below.
+
+### 3. Paste the Worker code
+
+Skip this step if you used the Git-based flow; it deploys from source.
+
+The dashboard editor is safest with JavaScript, so use the bundled Worker instead of the TypeScript source.
+
+```bash
+pnpm install
+pnpm build
+```
+
+1. Open `worker/dist/index.js`.
+2. Replace the editor contents with that file.
+3. Remove the final `//# sourceMappingURL=index.js.map` line if it is present.
+4. Select **Deploy**.
+
+If your editor accepts TypeScript, `worker/src/index.ts` also works.
+
+### 4. Add the binding and variables
+
+In the Worker settings:
+
+- **Bindings** > **Add binding** > **R2 bucket**:
+  - Variable name: `MAIL`
+  - Bucket: the bucket you created
+  - Skip this if you used the Git flow; `worker/wrangler.jsonc` already declares the binding.
+- **Variables and Secrets**:
+  - `bmail_mail_domains` as text: a comma-separated list, for example `mail.example.com`
+  - `bmail_api_key` as a secret: at least 16 random characters
+
+Save and deploy. The API returns `503` until the binding and key exist.
+
+### 5. Set the compatibility date
+
+Go to **Settings** > **Runtime** > **Compatibility date** and use `2026-03-12` or a later date supported by your account. No compatibility flags are required.
+
+### 6. Add the R2 lifecycle rules
+
+Go to **R2 object storage** > your bucket > **Settings** > **Object lifecycle rules**:
+
+- Rule `bmail-expire-mail`, prefix `mail/`, delete after 7 days.
+- Rule `bmail-expire-latest`, prefix `latest/`, delete after 7 days.
+
+Use a longer window if you want more recovery time. New rules can take up to 24 hours to apply. The Worker does not need `bmail_lifecycle_days` in the dashboard path; that variable is only used by `pnpm deploy`.
+
+### 7. Route mail to the Worker
+
+Go to **Compute** > **Email Service** > **Email Routing**, or the zone's **Email** > **Email Routing** page:
+
+1. Enable Email Routing for the domain. For a subdomain, add it under **Settings** > **Subdomains** first.
+2. For a catch-all domain: **Routing rules** > **Catch-all** > action **Send to Worker** > `bmail`.
+3. For one address: **Create routing rule**, enter the local part, action **Send to Worker** > `bmail`.
+4. If you need a personal archive, remember that a catch-all has only one action. Use a literal rule for the agent address to the Worker and leave the catch-all forwarding to your inbox, or run bmail on a separate subdomain.
+
+### 8. Verify
+
+```bash
+curl https://<worker-url>/health
+```
+
+Then send a message to `test@mail.example.com` and list it:
+
+```bash
+curl 'https://<worker-url>/v1/inbox/test%40mail.example.com' \
+  -H "authorization: Bearer <bmail_api_key>"
+```
+
+Use `https://<worker-url>` as `bmail_api_url` in the MCP config. The following values are only used by the CLI deploy script, so you can leave them out of the dashboard path: `bmail_lifecycle_days`, `cloudflare_worker_name`, `cloudflare_r2_bucket_name`, `cloudflare_account_id`.
 
 ## Configuration
 
