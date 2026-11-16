@@ -269,7 +269,7 @@ async function handleFetch(request: Request, env: Env): Promise<Response> {
     }
     const apiKeyPresent = Boolean((env.bmail_api_key ?? "").trim());
     const apiKeyValid = Boolean(apiKeyFromEnv(env));
-    const r2Ok = Boolean(env.MAIL);
+    const r2Ok = typeof env.MAIL?.put === "function";
     const ready = mailDomainsValid && apiKeyValid && r2Ok;
 
     if (!ready) {
@@ -368,7 +368,7 @@ async function handleEmail(
     return;
   }
 
-  const address = message.to.trim().toLowerCase();
+  const address = (message.to ?? "").trim().toLowerCase();
   if (!recipientAllowed(recipients, address)) {
     return;
   }
@@ -378,18 +378,36 @@ async function handleEmail(
     return;
   }
 
+  console.log(`bmail: received ${address} size=${message.rawSize}`);
+
+  if (typeof env.MAIL?.put !== "function") {
+    console.error("bmail: MAIL is not an R2 binding");
+    throw new Error("MAIL R2 binding is missing or invalid");
+  }
+
   const id = newMessageId();
   const receivedAt = new Date().toISOString();
   const key = messageKey(address, id);
-  await env.MAIL.put(key, message.raw, {
-    customMetadata: {
-      from: asciiPreview(message.from.trim().toLowerCase(), 320),
-      subject: asciiPreview(message.headers.get("subject") ?? "", 200),
-      received_at: receivedAt,
-      size: String(message.rawSize),
-      dmarc: readDmarc(message.headers),
-    },
-  });
+  const from = asciiPreview((message.from ?? "").trim().toLowerCase(), 320);
+
+  try {
+    await env.MAIL.put(key, message.raw, {
+      customMetadata: {
+        from,
+        subject: asciiPreview(message.headers.get("subject") ?? "", 200),
+        received_at: receivedAt,
+        size: String(message.rawSize),
+        dmarc: readDmarc(message.headers),
+      },
+    });
+  } catch (error) {
+    console.error(
+      `bmail: R2 message write failed for ${address} ${id}: ${
+        error instanceof Error ? (error.stack ?? error.message) : String(error)
+      }`,
+    );
+    throw error;
+  }
 
   try {
     await env.MAIL.put(latestKey(address), "", {
@@ -399,8 +417,15 @@ async function handleEmail(
     // Keep the marker and the message consistent. A missing marker would make
     // a cursor poll skip the message.
     await env.MAIL.delete(key);
+    console.error(
+      `bmail: R2 marker write failed for ${address} ${id}: ${
+        error instanceof Error ? (error.stack ?? error.message) : String(error)
+      }`,
+    );
     throw error;
   }
+
+  console.log(`bmail: stored ${address} id=${id}`);
 }
 
 export default {

@@ -459,9 +459,29 @@ llm-res/    agent rules, phase state, memory, threat model
 
 - `present: false` - the variable or secret is not on the running Worker version. Check the environment (Production vs Preview), make sure it is a runtime variable and not a build variable, and deploy a new version.
 - `present: true` and `valid: false` - the value exists but is unusable. For `bmail_mail_domains`, check quotes, wildcards, or an empty entry. For `bmail_api_key`, the value must be at least 16 characters.
-- `r2_binding: false` - add an **R2 bucket binding** with variable name `MAIL`. An environment variable named `cloudflare_r2_bucket_name` is not a binding and the Worker does not read it.
+- `r2_binding: false` - add an **R2 bucket binding** with variable name `MAIL`. A plain text variable named `MAIL` does not count; the check requires the R2 API. An environment variable named `cloudflare_r2_bucket_name` is not a binding and the Worker does not read it.
 
 Make the change, deploy a new version, and call `/health` again. The Worker also logs a `bmail: not ready {...}` line with the same presence and validity flags, visible in `wrangler tail`.
+
+### Delivery failed: `worker script threw an exception`
+
+The Email Routing activity log only reports a generic upstream error. The Worker log has the actual exception.
+
+1. Start live logs:
+   ```bash
+   wrangler tail bmail
+   ```
+   Or open the Worker in the dashboard and use **Logs** > **Real-time logs**.
+2. Send another test email.
+3. Look for:
+   - `bmail: received <address> size=<n>` - the handler started.
+   - `bmail: stored <address> id=<id>` - the R2 writes succeeded.
+   - `bmail: MAIL is not an R2 binding` - delete any plain variable named `MAIL` and add an R2 bucket binding named `MAIL`.
+   - `bmail: R2 message write failed` - the binding exists but the write failed; check the bucket still exists, the binding points to the right bucket, and R2 usage is within quota.
+
+If there is no `bmail: received` line, the running Worker does not have the email handler or your recipient allowlist rejected the message before storage.
+
+Also re-check `/health`. `r2_binding` should still be true after the deployment that added your variables. A redeploy from `wrangler.jsonc` can replace a dashboard binding if the bucket name in the file is different.
 
 ### `config_invalid`
 

@@ -34,7 +34,7 @@ Commands that prove the current state builds, lints, and tests clean:
 - Smoke: `pnpm smoke` (needs `bmail_api_url`, `bmail_api_key`, `bmail_address`)
 - MCP: `pnpm mcp`
 
-Last verified result: lint clean, 20 tests passing, Worker bundle 11.66 KiB (gzip 3.65 KiB), smoke test 10/10 passing locally.
+Last verified result: lint clean, 20 tests passing, Worker bundle 12.33 KiB (gzip 3.79 KiB), smoke test 10/10 passing locally.
 
 Local end-to-end check: delivered mail to two configured domains, listed metadata, fetched raw MIME, rejected a bad key with 401, rejected an unconfigured domain with 403, exercised all four MCP tools including `wait_for_message` with a delayed delivery, verified that a cursor poll returns empty until the latest marker changes, verified that `ack_message` removes the object and makes the raw read return 404, and verified that a domain entry accepts any local part while an exact entry rejects other local parts.
 
@@ -55,8 +55,10 @@ Local end-to-end check: delivered mail to two configured domains, listed metadat
 | fix | workspace deploy | done | `deploy:worker` script name; Git project root must be `worker` |
 | docs | sanity check | done | `pnpm smoke` plus manual health, mail, raw, ack, and MCP checks |
 | fix | config error | done | `config_invalid` names `bmail_mail_domains`; troubleshooting for `.env` vs dashboard |
-| fix | health readiness | done | `/health` reports present/valid for vars and the R2 binding |
 | fix | allowlist wildcards | done | Bare domain means all local parts; wildcard entries are rejected |
+| fix | health readiness | done | `/health` reports present/valid for vars and the R2 binding |
+| fix | email ingest logging | done | Received/stored/R2 failure logs and missing-binding guard |
+| fix | R2 binding check | done | Health and ingest verify `MAIL` is an R2 binding, not a variable |
 
 ## Decisions & notes
 
