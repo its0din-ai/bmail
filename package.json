@@ -13,9 +13,7 @@
     "test": "vitest run",
     "dev": "node scripts/dev.mjs",
     "deploy": "node scripts/deploy.mjs",
-    "bmail": "node client/dist/cli.js",
-    "smoke": "node scripts/smoke.mjs",
-    "db:migrate:local": "wrangler d1 execute bmail --local --config worker/wrangler.jsonc --file worker/migrations/0001_init.sql"
+    "mcp": "node client/dist/mcp.js"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

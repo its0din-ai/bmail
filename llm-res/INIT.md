@@ -8,89 +8,84 @@ Project initiation record (per `AGENTIC.md` section 0). Fill this **once, before
 
 - Project name: bmail (display name: bountyMail)
 - Project slug (snake_case, used for repo/directory/binary names): bmail
-- One-line description: Self-hostable inbound email gateway for an autonomous security agent - alias per target, raw mail stored, read API/CLI/MCP, mirrored copy to the owner.
-- Distribution: public and self-hosted. No deployment-specific domain, address, account ID, or token is committed to the repository.
-- Hosting constraint: **Cloudflare Workers Free plan**. Every feature must fit the Free limits; paid-only primitives (Durable Objects, Queues) and quota-heavy features are excluded by design.
+- One-line description: Tiny inbound email inbox on Cloudflare Workers. Mail lands in R2, and an agent polls it over REST or MCP.
+- Distribution: public and self-hosted. No deployment-specific domain, address, account ID, or key is committed.
+- Hosting constraint: **Cloudflare Workers Free plan**. R2 is the only storage; no D1, Durable Objects, Queues, or KV.
 - App type: worker
 - Owner: `undecided`
 - Date initialized (UTC): 2026-11-16
 
 ## Tech stack
 
-- Primary language + version: TypeScript (Cloudflare Workers runtime; Node.js 22+ for tooling)
-- Framework: Cloudflare Workers + Wrangler; the Worker uses a native `fetch` router and no HTTP framework (smallest bundle and CPU)
+- Primary language + version: TypeScript (Cloudflare Workers runtime; Node.js 22+ for the MCP client and tooling)
+- Framework: Cloudflare Workers + Wrangler; native `fetch` router, no HTTP framework
 - Package manager: pnpm (workspace: `worker/` and `client/`)
-- Runtime: Cloudflare Workers (V8 isolates) on the **Workers Free plan**
-- Database / storage: D1 (metadata only), R2 (raw RFC 5322 messages, attachments stay inside the raw MIME), KV not used in v1
-- Auth mechanism: per-agent bearer tokens, SHA-256 hashed at rest with a server-side pepper, scoped per mail domain, optional expiry
-- Key third-party dependencies (only those justified by the task): Worker runtime: none. `bmail` client and MCP server: `postal-mime` (local parsing), MCP SDK, TypeScript.
-- Why this stack (1-2 lines): Email Routing invokes a Worker directly for inbound mail, and D1/R2 cover metadata and raw content with no extra infrastructure. The Worker stores raw mail **without parsing**, so ingest stays inside the Free plan's 10 ms CPU budget; MIME parsing runs on the agent host.
-- Free-tier budget (verified 2026-11-16): 100,000 requests/day; 10 ms CPU per HTTP request and per Cron Trigger; 128 MB memory; 50 subrequests; 5 Cron Triggers per account. D1: 5M rows read/day, 100,000 rows written/day, 5 GB. R2: 10 GB-month, 1M Class A and 10M Class B operations/month. Every v1 feature is sized against these numbers.
-- Configuration: `.env` at the repo root is the source of truth. The Worker cannot read `.env` at runtime, so the deploy script maps `bmail_*` values to Worker `vars` and secrets and writes `.dev.vars` for local dev. `.env` is gitignored; `.env.example` carries placeholders only.
+- Runtime: Cloudflare Workers (V8 isolates) on the Workers Free plan
+- Database / storage: R2 only. One object per message under `mail/<address>/<timestamp>-<random>.eml`
+- Auth mechanism: one shared bearer key, `bmail_api_key`, compared in constant time
+- Key third-party dependencies: Worker runtime: none. MCP client: `postal-mime`, `@modelcontextprotocol/sdk`, `zod`
+- Why this stack: Email Routing invokes a Worker directly, R2 stores raw MIME without a database, and the MCP client parses mail on the agent host so the Worker stays tiny.
+- Configuration: `.env` is the source of truth. `pnpm dev` writes `worker/.dev.vars`; `pnpm deploy` maps values to Worker vars and the secret.
 
 ## Design system
 
 - Design system: **Neo Brutalism** (override of the `AGENTIC.md` section 13 default Material 3; approved by the user on 2026-11-16)
 - Reference: <https://www.neobrutalism.dev/docs>
-- Component source: shadcn/ui registry, `https://neobrutalism.dev/r/styling/<palette>.json`; built on Base UI, Tailwind CSS, `class-variance-authority`, `lucide-react`, `tw-animate-css`
+- Applies to: any web UI built later. v1 has no UI.
 - Theme modes: light / dark / auto (default: auto)
-- Theme persistence: `undecided` (proposed: `localStorage["bmail_theme"]`, explicit stored choice)
-- Source / seed color (M3 replaced by neobrutalism palette): `undecided` - proposed start with the blue registry palette (`--main: hsl(217 100% 66%)`); palette chosen at UI phase
-- Design tokens: `--background`, `--secondary-background`, `--main`, `--main-foreground`, `--foreground`, `--border`, `--ring`, `--overlay`, `--shadow`; 4px hard offset shadow, 5px base radius, base font weight 500, heading weight 700
+- Theme persistence: `undecided`
+- Source / seed color: `undecided`
 - Motion engine: anime.js (v4+), unchanged from `AGENTIC.md`
-- Motion policy: 150-300 ms, snappy press/offset feedback on interactive elements, `prefers-reduced-motion` respected
-- Accessibility target: WCAG AA - verify every `--main` / `--main-foreground` pair and the focus ring; a border or shadow alone is never the only focus indicator
-- Approved overrides (design system, motion, or theme): design system only (Material 3 -> Neo Brutalism). Motion (anime.js) and the light/dark/auto tri-state stay in force.
-- Applies to: any web UI built for this project. v1 is headless, so the override takes effect when the admin UI phase starts.
+- Motion policy: 150-300 ms, `prefers-reduced-motion` respected
+- Accessibility target: WCAG AA
+- Approved overrides: design system only. Motion and the light/dark/auto tri-state stay in force.
 
 ## Layout
 
 - Project root (absolute path): /home/enji/dev/ts/bmail
-- App/source directory: pnpm workspace: `worker/` and `client/`
+- App/source directory: pnpm workspace with `worker/` and `client/`
 - Tests directory: `worker/test/` and `client/test/`
-- Config/secrets: `.env` (gitignored) and `.env.example` (committed placeholders, synced per AGENTIC.md section 8)
+- Config/secrets: `.env` (gitignored) and `.env.example` (committed placeholders)
 
 ## Commands (canonical verify commands)
 
 - Install: `pnpm install`
-- Build: `pnpm build` (wrangler dry-run bundle + client tsc)
+- Build: `pnpm build`
 - Lint (must be zero warnings): `pnpm lint`
-- Format: `pnpm lint` (no separate formatter configured)
+- Format: `pnpm lint` (no separate formatter)
 - Test: `pnpm test`
-- Run dev (bind 127.0.0.1 only): `pnpm dev` (writes `worker/.dev.vars` from `.env`, listens on 127.0.0.1:8787)
-- Run prod: `pnpm deploy` (requires Cloudflare credentials, D1 and R2 created, and remote migration applied)
-- Smoke test: `pnpm smoke` (requires a running local server and `BMAIL_ADMIN_TOKEN`)
+- Run dev (bind 127.0.0.1 only): `pnpm dev`
+- Run prod: `pnpm deploy`
+- MCP server: `pnpm mcp` or `node client/dist/mcp.js`
 
 ## Environments & release
 
 - Environments (dev/staging/prod): local dev + production Worker per self-hosted deployment
-- Mail domains: **not in code**. `bmail_mail_domains` is a comma-separated `domain:mode` list. `catch_all` allows new aliases; `fixed` allows only the addresses in `bmail_fixed_addresses`, which are created on first inbound.
-- Default mail domain for clients: `bmail_default_mail_domain`, used by the CLI/MCP when a call omits `mail_domain`.
-- Agent runtime: remote host - the agent runs the `bmail` client and stdio MCP server next to itself and calls the public HTTPS API; no Worker-side MCP endpoint, no OAuth
-- Deploy target / mechanism: Cloudflare Workers via Wrangler, deployed by tag, Free plan
+- Mail domains: **not in code**. `bmail_mail_domains` is a comma-separated list. Any address on a configured domain is accepted.
+- Deploy target / mechanism: Cloudflare Workers via Wrangler, Free plan, deployed by tag
+- Retention: none. R2 keeps messages until the operator deletes them or adds an R2 lifecycle rule.
 
 ## Security
 
-- Security tier: strict core, confirmed by the user on 2026-11-16, with a free-tier efficiency budget. No security control is relaxed: hashed tokens, per-domain scope, optional expiry, sender authentication, input validation, secrets handling, and dependency audit all stay. Efficiency comes from doing less work per invocation and moving MIME parsing to the agent host, not from weaker checks.
-- Hardcoding ban: no domain, email address, account ID, zone ID, or token may appear in source, config examples, docs, or tests. Examples use reserved names (`example.com`, `example.test`). Missing runtime config fails closed.
-- Data handled and classification (public / internal / confidential / secret): message bodies, OTP codes, verification links = confidential; alias metadata and mail domains = internal; agent bearer tokens = secret
-- Retention: `bmail_retention_days` (default 90) for aliases, messages, and raw MIME (attachments live inside the raw message)
-- Mirror loop guard: `bmail_forward_to` must not be on a configured mail domain, and any message carrying `X-BMail-*` headers is dropped on re-entry
-- Trust boundaries: internet mail -> Email Routing -> Worker `email()`; remote agent -> public HTTPS API; Worker -> D1/R2; domain config -> Worker bindings
+- Security tier: strict core with a single shared API key.
+- Hardcoding ban: no domain, address, account ID, or key in source, config examples, docs, or tests. Examples use reserved names. Missing config fails closed.
+- Data handled: raw email, OTPs, verification links = confidential; addresses = internal; `bmail_api_key` = secret.
+- Trust boundaries: internet mail -> Email Routing -> Worker `email()`; agent -> public HTTPS API; Worker -> R2.
+- Controls: constant-time key comparison, strict address validation before building R2 keys, 25 MiB platform size cap, no body logging, raw parsing only on the agent host.
+- No retention and no rate limiting: storage growth and request volume are operator concerns, documented in `THREAT.md`.
 
 ## Scope
 
-- In scope for the first phase: `phase_01_inbound_capture` - Worker skeleton on the Free plan, multi-domain config from env with `catch_all` and `fixed` modes, fixed-address auto-create, alias lookup keyed by `(mail_domain, local_part)`, trusted Authentication-Results handling, header-only metadata, raw stream to R2, D1 insert, mirror copy to the owner inbox
-- Deferred (not v1): outbound mail, Worker-hosted MCP endpoint, admin web UI, Durable Objects, Queues, full-text search, MIME parsing inside the Worker
-- Dropped as unneeded for v1: attachment table and download endpoint (raw MIME already contains them), read/unread state, threading metadata, per-alias token scope, alias pause/update (delete and recreate), D1 audit table (Workers logs instead), rate-limit tables, CORS, HTML rendering and sanitization
-- Open questions (resolve before the phase that needs them):
-  - Package manager, source/test layout, and canonical commands
+- In scope for v1: `email()` R2 ingest, one REST list route, one REST raw route, one stdio MCP server with `list_messages`, `get_message`, `wait_for_message`.
+- Out of scope: aliases, registration, D1, retention cleanup, UI, outbound mail, Worker-hosted MCP, rate limiting, full-text search.
+- Open questions:
   - Owner name
+  - Deployment zone and R2 bucket name in the real `.env`
 
 ## Agent completion checklist
 
 - [ ] Every field filled - no blanks or `TODO` markers remain (write `none` + reason if not applicable)
-- [ ] Stack, layout, design system, and commands confirmed by the user
-- [ ] Values copied into the `PHASE.md` Workspace block
-- [ ] Initialization recorded as the first `MEMORY.md` entry
-- [ ] `THREAT.md` seeded from the stack, data handled, and trust boundaries
+- [x] Stack, layout, design system, and commands confirmed by the user
+- [x] Values copied into the `PHASE.md` Workspace block
+- [x] Initialization recorded in `MEMORY.md`
+- [x] `THREAT.md` seeded from the stack, data handled, and trust boundaries

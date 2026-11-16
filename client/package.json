@@ -1,10 +1,10 @@
 {
-  "name": "bmail-client",
+  "name": "bmail-mcp",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "bin": {
-    "bmail": "./dist/cli.js"
+    "bmail-mcp": "./dist/mcp.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json"

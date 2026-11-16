@@ -30,9 +30,9 @@ function parseEnv(path) {
 const env = parseEnv(".env");
 const dryRun = process.env.bmail_deploy_dry_run === "1";
 if (!env.bmail_mail_domains) throw new Error("bmail_mail_domains is required");
-if (!env.bmail_token_pepper) throw new Error("bmail_token_pepper is required");
-if (!env.cloudflare_d1_database_id) {
-  throw new Error("cloudflare_d1_database_id is required");
+if (!env.bmail_api_key) throw new Error("bmail_api_key is required");
+if (env.bmail_api_key.length < 16) {
+  throw new Error("bmail_api_key must be at least 16 characters");
 }
 if (!env.cloudflare_r2_bucket_name) {
   throw new Error("cloudflare_r2_bucket_name is required");
@@ -40,9 +40,6 @@ if (!env.cloudflare_r2_bucket_name) {
 
 const config = JSON.parse(readFileSync("worker/wrangler.jsonc", "utf8"));
 if (env.cloudflare_worker_name) config.name = env.cloudflare_worker_name;
-if (config.d1_databases?.[0]) {
-  config.d1_databases[0].database_id = env.cloudflare_d1_database_id;
-}
 if (config.r2_buckets?.[0]) {
   config.r2_buckets[0].bucket_name = env.cloudflare_r2_bucket_name;
 }
@@ -50,21 +47,12 @@ if (config.r2_buckets?.[0]) {
 const generated = "worker/wrangler.deploy.jsonc";
 writeFileSync(generated, `${JSON.stringify(config, null, 2)}\n`);
 
-const vars = [
-  "bmail_mail_domains",
-  "bmail_fixed_addresses",
-  "bmail_default_mail_domain",
-  "bmail_forward_to",
-  "bmail_retention_days",
-];
 const args = ["deploy", "--config", "wrangler.deploy.jsonc"];
 if (dryRun) args.push("--dry-run");
 if (env.cloudflare_account_id) {
   args.push("--account-id", env.cloudflare_account_id);
 }
-for (const key of vars) {
-  if (env[key]) args.push("--var", `${key}:${env[key]}`);
-}
+args.push("--var", `bmail_mail_domains:${env.bmail_mail_domains}`);
 
 const deployed = spawnSync("wrangler", args, {
   cwd: "worker",
@@ -76,21 +64,19 @@ if (deployed.status !== 0) {
   process.exit(deployed.status ?? 1);
 }
 
-for (const key of ["bmail_token_pepper", "bmail_admin_token"]) {
-  if (dryRun) break;
-  if (!env[key]) continue;
-  const result = spawnSync(
+if (!dryRun) {
+  const secret = spawnSync(
     "wrangler",
-    ["secret", "put", key, "--config", "wrangler.deploy.jsonc"],
+    ["secret", "put", "bmail_api_key", "--config", "wrangler.deploy.jsonc"],
     {
       cwd: "worker",
-      input: `${env[key]}\n`,
+      input: `${env.bmail_api_key}\n`,
       stdio: ["pipe", "inherit", "inherit"],
     },
   );
-  if (result.status !== 0) {
+  if (secret.status !== 0) {
     rmSync(generated, { force: true });
-    process.exit(result.status ?? 1);
+    process.exit(secret.status ?? 1);
   }
 }
 

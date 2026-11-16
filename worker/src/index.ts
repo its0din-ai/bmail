@@ -1,26 +1,306 @@
-import { parseConfig } from "./config";
-import { deleteExpired } from "./db";
-import { handleEmail } from "./email";
-import { handleRequest } from "./http";
-import type { Env } from "./types";
+interface Env {
+  MAIL: R2Bucket;
+  bmail_mail_domains?: string;
+  bmail_api_key?: string;
+}
+
+const MAX_MESSAGE_BYTES = 25 * 1024 * 1024;
+const DOMAIN_RE =
+  /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
+const LOCAL_RE = /^[a-z0-9](?:[a-z0-9._+-]{0,62}[a-z0-9])?$/;
+const MESSAGE_ID_RE = /^\d{13}-[a-z0-9]{1,32}$/;
+
+class ConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ConfigError";
+  }
+}
+
+function json(data: unknown, status = 200): Response {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store",
+    },
+  });
+}
+
+function fail(code: string, message: string, status: number): Response {
+  return json({ error: { code, message } }, status);
+}
+
+export function timingSafeEqual(left: string, right: string): boolean {
+  if (left.length !== right.length) return false;
+  let difference = 0;
+  for (let index = 0; index < left.length; index += 1) {
+    difference |= left.charCodeAt(index) ^ right.charCodeAt(index);
+  }
+  return difference === 0;
+}
+
+export function parseDomains(raw: string | undefined): Set<string> {
+  const domains = new Set<string>();
+  for (const item of (raw ?? "").split(",")) {
+    const domain = item.trim().toLowerCase();
+    if (!domain) continue;
+    if (!DOMAIN_RE.test(domain)) {
+      throw new ConfigError(`invalid mail domain: ${domain}`);
+    }
+    domains.add(domain);
+  }
+  if (domains.size === 0) {
+    throw new ConfigError("bmail_mail_domains is empty");
+  }
+  return domains;
+}
+
+export function splitAddress(
+  value: string,
+): { local_part: string; mail_domain: string } | null {
+  const address = value.trim().toLowerCase();
+  const at = address.lastIndexOf("@");
+  if (at <= 0 || at === address.length - 1) return null;
+  const local_part = address.slice(0, at);
+  const mail_domain = address.slice(at + 1);
+  if (!LOCAL_RE.test(local_part) || !DOMAIN_RE.test(mail_domain)) return null;
+  return { local_part, mail_domain };
+}
+
+export function readDmarc(headers: Headers): string {
+  for (const [name, value] of headers) {
+    if (name.toLowerCase() !== "authentication-results") continue;
+    if (!value.toLowerCase().includes("mx.cloudflare.net")) continue;
+    const match = /\bdmarc\s*=\s*([a-z]+)/i.exec(value);
+    return match?.[1]?.toLowerCase() ?? "none";
+  }
+  return "none";
+}
+
+function messagePrefix(address: string): string {
+  return `mail/${address}/`;
+}
+
+function messageKey(address: string, id: string): string {
+  return `${messagePrefix(address)}${id}.eml`;
+}
+
+function newMessageId(): string {
+  const random = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
+  return `${Date.now()}-${random}`;
+}
+
+function asciiPreview(value: string, maxLength: number): string {
+  return value.replace(/[^\x20-\x7e]/g, "?").slice(0, maxLength);
+}
+
+function bearerToken(request: Request): string | null {
+  const header = request.headers.get("authorization");
+  if (!header) return null;
+  const separator = header.indexOf(" ");
+  if (separator <= 0) return null;
+  const scheme = header.slice(0, separator).toLowerCase();
+  const token = header.slice(separator + 1).trim();
+  return scheme === "bearer" && token ? token : null;
+}
+
+function apiKeyFromEnv(env: Env): string | null {
+  const key = (env.bmail_api_key ?? "").trim();
+  return key.length >= 16 ? key : null;
+}
+
+function unauthorized(): Response {
+  const response = fail("unauthorized", "Missing or invalid API key", 401);
+  response.headers.set("www-authenticate", 'Bearer realm="bmail"');
+  return response;
+}
+
+function readLimit(url: URL): number | null {
+  const raw = url.searchParams.get("limit");
+  if (raw === null) return 50;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 1 || value > 200) return null;
+  return value;
+}
+
+async function handleList(
+  requestUrl: URL,
+  env: Env,
+  address: string,
+): Promise<Response> {
+  const limit = readLimit(requestUrl);
+  if (limit === null) {
+    return fail("invalid_limit", "limit must be an integer from 1 to 200", 400);
+  }
+
+  const prefix = messagePrefix(address);
+  const after = requestUrl.searchParams.get("after") ?? undefined;
+  if (after && !after.startsWith(prefix)) {
+    return fail("invalid_cursor", "after does not belong to this address", 400);
+  }
+
+  const listed = await env.MAIL.list({
+    prefix,
+    limit,
+    startAfter: after,
+    include: ["customMetadata"],
+  });
+
+  const messages = listed.objects.slice(0, limit).map((object) => {
+    const metadata = object.customMetadata ?? {};
+    return {
+      id: object.key.slice(prefix.length, -4),
+      key: object.key,
+      from: metadata.from ?? "",
+      subject: metadata.subject ?? "",
+      received_at: metadata.received_at ?? object.uploaded.toISOString(),
+      size: Number(metadata.size ?? object.size),
+      dmarc: metadata.dmarc ?? "none",
+    };
+  });
+
+  return json({
+    address,
+    messages,
+    next_cursor:
+      messages.at(-1)?.key ??
+      listed.objects.at(-1)?.key ??
+      after ??
+      null,
+  });
+}
+
+async function handleRaw(
+  env: Env,
+  address: string,
+  id: string,
+): Promise<Response> {
+  if (!MESSAGE_ID_RE.test(id)) {
+    return fail("not_found", "Message not found", 404);
+  }
+  const object = await env.MAIL.get(messageKey(address, id));
+  if (!object) {
+    return fail("not_found", "Message not found", 404);
+  }
+
+  const headers = new Headers({
+    "content-type": "message/rfc822",
+    "content-disposition": `attachment; filename="${id}.eml"`,
+    "cache-control": "no-store",
+    "x-content-type-options": "nosniff",
+  });
+  for (const [key, value] of Object.entries(object.customMetadata ?? {})) {
+    headers.set(`x-bmail-${key.replace(/_/g, "-")}`, value);
+  }
+
+  return new Response(object.body, { headers });
+}
+
+async function handleFetch(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  if (request.method === "GET" && url.pathname === "/health") {
+    return json({ ok: true, version: "0.1.0" });
+  }
+
+  let domains: Set<string>;
+  try {
+    domains = parseDomains(env.bmail_mail_domains);
+  } catch (error) {
+    const message =
+      error instanceof ConfigError ? error.message : "invalid configuration";
+    console.error(`bmail: ${message}`);
+    return fail("config_invalid", "Server mail configuration is invalid", 503);
+  }
+
+  const apiKey = apiKeyFromEnv(env);
+  if (!apiKey) {
+    return fail("config_invalid", "bmail_api_key is not configured", 503);
+  }
+  const token = bearerToken(request);
+  if (!token || !timingSafeEqual(token, apiKey)) {
+    return unauthorized();
+  }
+
+  const segments = url.pathname.split("/").filter(Boolean);
+  if (
+    request.method !== "GET" ||
+    segments[0] !== "v1" ||
+    segments[1] !== "inbox" ||
+    (segments.length !== 3 && segments.length !== 4)
+  ) {
+    return fail("not_found", "Not found", 404);
+  }
+
+  let address: string;
+  try {
+    address = decodeURIComponent(segments[2] ?? "").toLowerCase();
+  } catch {
+    return fail("invalid_address", "Invalid address", 400);
+  }
+
+  const parts = splitAddress(address);
+  if (!parts || !domains.has(parts.mail_domain)) {
+    return fail("invalid_address", "Address is not allowed", 403);
+  }
+
+  if (segments.length === 3) {
+    return handleList(url, env, address);
+  }
+
+  return handleRaw(env, address, segments[3] ?? "");
+}
+
+async function handleEmail(
+  message: ForwardableEmailMessage,
+  env: Env,
+): Promise<void> {
+  let domains: Set<string>;
+  try {
+    domains = parseDomains(env.bmail_mail_domains);
+  } catch (error) {
+    const detail =
+      error instanceof ConfigError ? error.message : "invalid configuration";
+    console.error(`bmail: ${detail}, dropping message`);
+    return;
+  }
+
+  const address = message.to.trim().toLowerCase();
+  const parts = splitAddress(address);
+  if (!parts || !domains.has(parts.mail_domain)) {
+    return;
+  }
+
+  if (message.rawSize > MAX_MESSAGE_BYTES) {
+    message.setReject("Message too large");
+    return;
+  }
+
+  const id = newMessageId();
+  await env.MAIL.put(messageKey(address, id), message.raw, {
+    customMetadata: {
+      from: asciiPreview(message.from.trim().toLowerCase(), 320),
+      subject: asciiPreview(message.headers.get("subject") ?? "", 200),
+      received_at: new Date().toISOString(),
+      size: String(message.rawSize),
+      dmarc: readDmarc(message.headers),
+    },
+  });
+}
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    return handleRequest(request, env);
+    try {
+      return await handleFetch(request, env);
+    } catch (error) {
+      console.error(
+        `bmail: request failed: ${error instanceof Error ? error.message : "unknown error"}`,
+      );
+      return fail("internal_error", "Internal error", 500);
+    }
   },
 
   async email(message: ForwardableEmailMessage, env: Env): Promise<void> {
     await handleEmail(message, env);
-  },
-
-  async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
-    try {
-      const config = parseConfig(env);
-      await deleteExpired(env.DB, config.retention_days);
-    } catch (error) {
-      console.error(
-        `bmail: cleanup failed: ${error instanceof Error ? error.message : "unknown error"}`,
-      );
-    }
   },
 } satisfies ExportedHandler<Env>;

@@ -21,7 +21,7 @@ describe("parseRawEmail", () => {
   it("extracts subject, sender, text, links, and codes", async () => {
     const raw = [
       "From: Security Team <security@example.com>",
-      "To: acme-7f3k2a@mail.example.com",
+      "To: test@mail.example.com",
       "Subject: Your verification code",
       "Message-ID: <abc@example.com>",
       "Content-Type: text/plain; charset=utf-8",
@@ -45,7 +45,7 @@ describe("parseRawEmail", () => {
   it("derives text from an HTML-only message", async () => {
     const raw = [
       "From: Team <team@example.com>",
-      "To: acme@mail.example.com",
+      "To: test@mail.example.com",
       "Subject: Welcome",
       "Content-Type: text/html; charset=utf-8",
       "",

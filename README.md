@@ -1,164 +1,116 @@
-# bmail (bountyMail)
+# bmail
 
-Inbound-only email gateway for an autonomous security agent. It gives the agent its own addresses, stores raw mail, and exposes read-only access over HTTP, a CLI, and an MCP server.
+A tiny inbound email inbox on Cloudflare Workers. Mail is stored in R2 and read through a REST endpoint or an MCP server. No database, no UI, no aliases, no retention job.
 
-The Worker is designed for the **Cloudflare Workers Free plan**: it stores raw MIME without parsing it, so ingest stays inside the 10 ms CPU budget. MIME parsing happens on the agent host.
+## Flow
 
-## What it does
+1. Pick any address on a configured domain, for example `test@mail.example.com`.
+2. Poll it through the REST API or MCP with the shared key.
+3. If a message exists, read the raw message and parse it locally.
 
-- Accepts mail for one or more configured domains.
-- `catch_all` domains allow the agent to create aliases on demand.
-- `fixed` domains accept only allowlisted addresses, created automatically on first inbound.
-- Streams every accepted message into R2 and stores metadata in D1.
-- Mirrors a copy to the owner inbox with `X-BMail-*` tracing headers.
-- Exposes read-only API routes and an MCP server for the agent.
-- Deletes D1 rows after the retention window; an R2 lifecycle rule removes raw objects.
+There is no registration step. Every address on a configured domain is accepted.
 
 ## Requirements
 
-- Cloudflare account on the Free plan. No paid-only primitives are used.
+- Cloudflare account on the Free plan.
 - A domain on Cloudflare with Email Routing.
+- An R2 bucket.
 - Node.js 22 or newer, pnpm 10 or newer.
 
-## Local quick start
+## Setup
 
 ```bash
 pnpm install
 cp .env.example .env
-# fill in bmail_* values; reserved domains like mail.example.com are fine locally
-pnpm db:migrate:local
+# fill in bmail_mail_domains, bmail_api_key, cloudflare_r2_bucket_name
+wrangler login
+wrangler r2 bucket create <cloudflare_r2_bucket_name>
+pnpm deploy
+```
+
+Then in the Cloudflare dashboard:
+
+1. Enable Email Routing on each domain in `bmail_mail_domains`.
+2. For a catch-all domain, set the catch-all action to the `bmail` Worker.
+3. For a single address, create one literal routing rule to the `bmail` Worker.
+
+Mail is stored under `mail/<address>/<timestamp>-<random>.eml` in R2. Nothing deletes it automatically. If you want expiry, add an R2 lifecycle rule.
+
+## Local dev
+
+```bash
 pnpm dev
 ```
 
-`pnpm dev` writes `worker/.dev.vars` from `.env` and starts Wrangler on `127.0.0.1:8787`.
+`pnpm dev` writes `worker/.dev.vars` from `.env` and listens on `127.0.0.1:8787`.
 
-Create the first agent token with the admin token:
-
-```bash
-export bmail_api_url=http://127.0.0.1:8787
-export bmail_admin_token=<your bmail_admin_token>
-pnpm --filter bmail-client build
-node client/dist/cli.js tokens create --name local-agent --domains '*'
-```
-
-Send a local test message:
+Send a local message:
 
 ```bash
-curl --request POST 'http://127.0.0.1:8787/cdn-cgi/handler/email?from=sender@example.com&to=acme-7f3k2a@mail.example.com' \
+curl --request POST 'http://127.0.0.1:8787/cdn-cgi/handler/email?from=sender@example.com&to=test@mail.example.com' \
   --data-raw 'From: sender@example.com
-To: acme-7f3k2a@mail.example.com
+To: test@mail.example.com
 Subject: Test
-Message-ID: <test-1@example.com>
 Content-Type: text/plain
 
 Your code is 123456.'
 ```
 
-Then read it:
+List it:
 
 ```bash
-export bmail_token=<token from tokens create>
-node client/dist/cli.js messages list
-node client/dist/cli.js messages get <message_id>
+curl 'http://127.0.0.1:8787/v1/inbox/test%40mail.example.com' \
+  -H "authorization: Bearer $bmail_api_key"
 ```
 
-Run the local smoke test after the server is up:
+## REST API
 
-```bash
-BMAIL_ADMIN_TOKEN=<admin token> \
-BMAIL_CATCH_ALL=<catch-all domain> \
-BMAIL_FIXED=<fixed domain> \
-BMAIL_FIXED_ADDRESS=<address on the fixed domain> \
-pnpm smoke
-```
+All `/v1` routes require `Authorization: Bearer <bmail_api_key>`.
 
-## Configuration
-
-All runtime config comes from `.env`. The Worker cannot read `.env` directly, so `pnpm dev` and `pnpm deploy` map the values to Worker vars and secrets. No domain is compiled into the code.
-
-| key | purpose |
+| route | purpose |
 |---|---|
-| `bmail_mail_domains` | comma-separated `domain:mode`, mode is `catch_all` or `fixed` |
-| `bmail_fixed_addresses` | full addresses accepted on `fixed` domains |
-| `bmail_default_mail_domain` | default domain for API/CLI/MCP calls that omit `mail_domain` |
-| `bmail_forward_to` | verified Email Routing destination for the mirror; must not be on a configured mail domain |
-| `bmail_retention_days` | retention window, default 90 |
-| `bmail_token_pepper` | server-side pepper for token hashes |
-| `bmail_admin_token` | operator token for `/v1/tokens` and `bmail tokens ...` |
-| `cloudflare_worker_name` | Worker name for deploy |
-| `cloudflare_d1_database_id` | D1 database id for deploy |
-| `cloudflare_r2_bucket_name` | R2 bucket for deploy |
-| `cloudflare_account_id` | optional account id for deploy |
-| `bmail_api_url` | client only: API base URL |
-| `bmail_token` | client only: agent token |
+| `GET /health` | liveness, no auth |
+| `GET /v1/inbox/:address?after=<cursor>&limit=<n>` | list message metadata, newest paging via `next_cursor` |
+| `GET /v1/inbox/:address/:id` | raw RFC 5322 message |
 
-## Deploy
-
-```bash
-wrangler login
-wrangler d1 create bmail
-wrangler r2 bucket create bmail-mail
-# put the D1 id and bucket name in .env
-pnpm deploy
-wrangler d1 execute bmail --remote --config worker/wrangler.jsonc \
-  --file worker/migrations/0001_init.sql
-```
-
-Then in the Cloudflare dashboard:
-
-1. Enable Email Routing on each mail domain.
-2. For a `catch_all` domain, set the catch-all action to the `bmail` Worker.
-3. For a `fixed` domain, create one literal routing rule to the Worker for the address in `bmail_fixed_addresses`.
-4. Add an R2 lifecycle rule on the bucket that deletes objects after `bmail_retention_days`.
-5. The CRON trigger `17 3 * * *` deletes expired D1 rows.
-
-Create tokens with the operator token:
-
-```bash
-export bmail_api_url=https://<worker>.<account>.workers.dev
-export bmail_admin_token=<secret>
-pnpm bmail tokens create --name remote-agent --domains '*'
-```
-
-The token is printed once. Give it to the agent host.
+The address must be URL encoded. `after` is the `next_cursor` from the previous response. `limit` is 1 to 200, default 50.
 
 ## MCP server
 
-The MCP server runs on the agent host over stdio and calls the Worker API. Build the client first, then point the MCP client at `client/dist/cli.js` (or link the `bmail` bin globally with `pnpm --filter bmail-client link --global`):
+Build the client, then point the MCP client at `client/dist/mcp.js`:
+
+```bash
+pnpm build
+```
 
 ```json
 {
   "mcpServers": {
     "bmail": {
       "command": "node",
-      "args": ["/absolute/path/to/bmail/client/dist/cli.js", "mcp"],
+      "args": ["/absolute/path/to/bmail/client/dist/mcp.js"],
       "env": {
         "bmail_api_url": "https://bmail.example.workers.dev",
-        "bmail_token": "<agent token>",
-        "bmail_default_mail_domain": "mail.example.com"
+        "bmail_api_key": "<shared key>",
+        "bmail_address": "test@mail.example.com"
       }
     }
   }
 }
 ```
 
-Tools: `config`, `list_aliases`, `create_alias`, `delete_alias`, `list_messages`, `get_message`, `wait_for_message`.
+Tools:
 
-Every tool accepts an optional `mail_domain`. `wait_for_message` polls with a cursor and backoff. Message content is returned with `untrusted: true`; links and OTPs are candidates, not verified data.
+- `list_messages` - metadata for an address, with an `after` cursor.
+- `get_message` - fetch raw mail and return subject, text, links, OTP candidates, and attachment metadata.
+- `wait_for_message` - poll until a new message arrives, starting from now when `after` is omitted.
 
-## Security notes
+Every tool accepts an `address` argument; it defaults to `bmail_address`. Message content is returned with `untrusted: true`.
 
-- Tokens are stored as SHA-256 hashes with a server-side pepper, scoped per mail domain, with optional expiry.
-- Unknown aliases are dropped before the message body is read.
-- `fixed` domains accept only `bmail_fixed_addresses`.
-- The mirror target cannot be on a configured mail domain, and messages carrying `X-BMail-*` are dropped to prevent loops.
-- Raw mail is parsed on the agent host, not in the Worker.
-- Rate limiting is not implemented. The Workers daily request cap is the backstop.
+## Notes
 
-## Limits
-
-The design targets the Workers Free plan: 100,000 requests/day, 10 ms CPU per invocation, 5 GB D1 storage, 10 GB-month R2 storage. See the Cloudflare docs for current quotas.
-
-## License
-
-Not set yet.
+- One shared key grants access to every configured address.
+- No retention. R2 keeps messages until you delete them or add a lifecycle rule.
+- No rate limiting. The Workers daily request cap is the backstop.
+- MIME parsing happens in the MCP client, not in the Worker, so ingest stays cheap.
+- Raw message size is capped by Cloudflare at 25 MiB.
