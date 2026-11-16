@@ -19,7 +19,7 @@ Seed these from `INIT.md`, fill them in on session start, and confirm with `pwd`
 - Hosting: **Cloudflare Workers Free plan**. R2 is the only storage.
 - Current version (SemVer, per AGENTIC.md section 11): **0.1.0**. Not deployed, not tagged.
 - Micro-task just finished: extended `bmail_mail_domains` to accept domain entries (any local part) and full-address entries (exact), so a catch-all domain and a fixed program address can share the Worker safely.
-- Next micro-task: deploy. Create the R2 bucket, fill `.env`, run `pnpm deploy`, configure Email Routing, then tag `v0.1.0-{commit}`.
+- Next micro-task: deploy. Create the R2 bucket, fill `.env`, run `pnpm deploy:worker`, configure Email Routing, then tag `v0.1.0-{commit}`.
 - Current blockers: Cloudflare credentials and the real R2 bucket, final owner name.
 
 ## Verify
@@ -51,6 +51,7 @@ Local end-to-end check: delivered mail to two configured domains, listed metadat
 | docs | README + banner | done | Cloudflare product map, architecture, config, API, MCP, free-tier budget |
 | docs | dashboard deploy | done | In-browser editor and Git flow, bindings, lifecycle rules, Email Routing |
 | docs | env example | done | Marked lifecycle and cloudflare keys as CLI deploy only |
+| fix | workspace deploy | done | `deploy:worker` script name; Git project root must be `worker` |
 
 ## Decisions & notes
 
@@ -67,7 +68,7 @@ Local end-to-end check: delivered mail to two configured domains, listed metadat
 - **DMARC trust.** Follow the docs: read only the first `Authentication-Results` header, require `mx.cloudflare.net` as its authserv-id, then store its dmarc result. A sender-supplied header that merely mentions Cloudflare is ignored. Tested in `worker/test/index.test.ts`.
 - **MCP.** The server runs on the agent host over stdio and calls the REST API. `postal-mime` parses raw mail locally. `wait_for_message` starts at the current millisecond when `after` is omitted.
 - **Deletion.** `DELETE /v1/inbox/:address/:id` deletes the `.eml` object and returns 204, including when the object is already gone. The MCP `ack_message` wraps it. The latest marker may point at a deleted object; that is harmless because new mail updates it. The owner's forwarded archive is untouched.
-- **Lifecycle.** `pnpm deploy` sets an R2 lifecycle configuration with two rules: `mail/` and `latest/`, each deleting objects after `bmail_lifecycle_days` (default 7 days, `maxAge` in seconds). It uses `wrangler r2 bucket lifecycle set --file`, which replaces the bucket's lifecycle rules, so the bucket should be dedicated to bmail.
+- **Lifecycle.** `pnpm deploy:worker` sets an R2 lifecycle configuration with two rules: `mail/` and `latest/`, each deleting objects after `bmail_lifecycle_days` (default 7 days, `maxAge` in seconds). It uses `wrangler r2 bucket lifecycle set --file`, which replaces the bucket's lifecycle rules, so the bucket should be dedicated to bmail.
 - **No D1, no cron, no Durable Objects, no Queues, no KV.** R2 only.
 - **Free plan.** Ingest is two R2 Class A puts (message plus marker); listing is one list; raw reads are one get; ack is a free delete. The daily request cap and R2 free quota are the backstops.
 - **Config path.** `.env` is the source of truth. `scripts/dev.mjs` writes `worker/.dev.vars`; `scripts/deploy.mjs` generates a temporary Wrangler config, deploys `bmail_mail_domains` as a var, and sets `bmail_api_key` as a secret.

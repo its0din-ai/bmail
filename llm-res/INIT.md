@@ -25,7 +25,7 @@ Project initiation record (per `AGENTIC.md` section 0). Fill this **once, before
 - Auth mechanism: one shared bearer key, `bmail_api_key`, compared in constant time
 - Key third-party dependencies: Worker runtime: none. MCP client: `postal-mime`, `@modelcontextprotocol/sdk`, `zod`
 - Why this stack: Email Routing invokes a Worker directly, R2 stores raw MIME without a database, and the MCP client parses mail on the agent host so the Worker stays tiny.
-- Configuration: `.env` is the source of truth. `pnpm dev` writes `worker/.dev.vars`; `pnpm deploy` maps values to Worker vars and the secret.
+- Configuration: `.env` is the source of truth. `pnpm dev` writes `worker/.dev.vars`; `pnpm deploy:worker` maps values to Worker vars and the secret.
 
 ## Design system
 
@@ -55,7 +55,7 @@ Project initiation record (per `AGENTIC.md` section 0). Fill this **once, before
 - Format: `pnpm lint` (no separate formatter)
 - Test: `pnpm test`
 - Run dev (bind 127.0.0.1 only): `pnpm dev`
-- Run prod: `pnpm deploy`
+- Run prod: `pnpm deploy:worker`
 - MCP server: `pnpm mcp` or `node client/dist/mcp.js`
 
 ## Environments & release

@@ -12,7 +12,7 @@
     "lint": "tsc -p worker/tsconfig.json --noEmit && tsc -p client/tsconfig.json --noEmit",
     "test": "vitest run",
     "dev": "node scripts/dev.mjs",
-    "deploy": "node scripts/deploy.mjs",
+    "deploy:worker": "node scripts/deploy.mjs",
     "mcp": "node client/dist/mcp.js"
   },
   "devDependencies": {

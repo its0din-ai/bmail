@@ -112,10 +112,10 @@ cp .env.example .env
 # fill in bmail_mail_domains, bmail_api_key, cloudflare_r2_bucket_name
 wrangler login
 wrangler r2 bucket create <cloudflare_r2_bucket_name>
-pnpm deploy
+pnpm deploy:worker
 ```
 
-`pnpm deploy` deploys the Worker, uploads `bmail_api_key` as a secret, and sets the R2 lifecycle rules.
+`pnpm deploy:worker` deploys the Worker, uploads `bmail_api_key` as a secret, and sets the R2 lifecycle rules.
 
 Then in the Cloudflare dashboard:
 
@@ -132,7 +132,7 @@ The in-browser editor does not read `wrangler.jsonc` and does not run `scripts/d
 
 | Path | Config source | Lifecycle rule |
 |---|---|---|
-| CLI (`pnpm deploy`) | `.env` and `wrangler.jsonc` | Applied by the script. |
+| CLI (`pnpm deploy:worker`) | `.env` and `wrangler.jsonc` | Applied by the script. |
 | Dashboard editor | UI bindings and variables | Added manually in R2 settings. |
 | Dashboard Git | `wrangler.jsonc` plus UI variables | Added manually in R2 settings. |
 
@@ -152,11 +152,13 @@ If your account only shows the Git-based **Create application** flow, use that i
 
 1. Push this repository to GitHub or GitLab.
 2. Connect it in **Workers & Pages** > **Create application**.
-3. Root directory: the repository root.
-4. Build command: `pnpm install`.
-5. Deploy command: `npx wrangler deploy --config worker/wrangler.jsonc`.
+3. **Root directory:** `worker`. Do not use the repository root. bmail is a pnpm workspace, and Cloudflare needs a specific project.
+4. Build command: leave it empty if the UI allows it, or use `npx wrangler deploy --dry-run`.
+5. Deploy command: `npx wrangler deploy`.
 6. Create the R2 bucket with the name in `worker/wrangler.jsonc` (`bmail-mail`), or edit that file before pushing.
 7. Add `bmail_mail_domains` and `bmail_api_key` in the dashboard as described in step 4 below.
+
+If Cloudflare reports **"The Cloudflare application detection logic has been run in the root of a workspace instead of targeting a specific project"**, the project root is still the repository root. Open the project's build settings, set **Root directory** to `worker`, and redeploy.
 
 ### 3. Paste the Worker code
 
@@ -201,7 +203,7 @@ Go to **R2 object storage** > your bucket > **Settings** > **Object lifecycle ru
 - Rule `bmail-expire-mail`, prefix `mail/`, delete after 7 days.
 - Rule `bmail-expire-latest`, prefix `latest/`, delete after 7 days.
 
-Use a longer window if you want more recovery time. New rules can take up to 24 hours to apply. The Worker does not need `bmail_lifecycle_days` in the dashboard path; that variable is only used by `pnpm deploy`.
+Use a longer window if you want more recovery time. New rules can take up to 24 hours to apply. The Worker does not need `bmail_lifecycle_days` in the dashboard path; that variable is only used by `pnpm deploy:worker`.
 
 ### 7. Route mail to the Worker
 
@@ -229,7 +231,7 @@ Use `https://<worker-url>` as `bmail_api_url` in the MCP config. The following v
 
 ## Configuration
 
-`.env` is the source of truth. `pnpm dev` writes `worker/.dev.vars`; `pnpm deploy` maps the values to Worker vars and secrets.
+`.env` is the source of truth. `pnpm dev` writes `worker/.dev.vars`; `pnpm deploy:worker` maps the values to Worker vars and secrets.
 
 | Key | Used by | Purpose |
 |---|---|---|
@@ -319,7 +321,7 @@ Every tool accepts an `address` argument; it defaults to `bmail_address`. Messag
 
 - `ack_message` removes `mail/<address>/<id>.eml` immediately.
 - The `latest/<address>` marker may still point at the deleted object. New mail updates it, so this is harmless.
-- `pnpm deploy` sets two R2 lifecycle rules, `mail/` and `latest/`, each expiring after `bmail_lifecycle_days` (default 7).
+- `pnpm deploy:worker` sets two R2 lifecycle rules, `mail/` and `latest/`, each expiring after `bmail_lifecycle_days` (default 7).
 - The lifecycle command replaces the bucket's lifecycle configuration, so use a dedicated bucket or merge your own rules into the generated file.
 
 ## Free plan budget
