@@ -1,0 +1,36 @@
+# MEMORY.md
+
+Continuous action log for this project (per `AGENTIC.md` section 12). Append an entry immediately after every action and before any long or risky one - never wait for the end of the session. If the agent dies mid-process, this file plus `PHASE.md` is the recovery record.
+
+**Role:** append-only action log. **Read when:** after `PHASE.md`, newest first. **Update when:** immediately after every action.
+
+Rules: newest entry first; append-only (correct mistakes with a new entry, never delete history); no secrets or secret values; keep each entry to 1-3 lines.
+
+Format:
+
+```
+- <ISO-8601 UTC> | <phase> / <micro_task> | <status> | <what happened + next step> | <files touched> | <verify result>
+```
+
+`status` is one of `start`, `done`, `failed`, `blocked`, `stopped`. Timestamp: `date -u +%Y-%m-%dT%H:%M:%SZ`.
+
+## Log
+
+- 2026-11-16T09:32:50Z | maintenance / public_release_redaction | done | Redacted deployment domain names in older log entries to placeholders before the public commit, superseding the 09:17 history note. This is a deliberate privacy edit of historical entries. | llm-res/MEMORY.md | no deployment literals remain
+- 2026-11-16T09:32:40Z | phase_05 / smoke_hardening | done | Made the smoke test idempotent with per-run aliases and scoped assertions; 25 checks pass repeatedly. | scripts/smoke.mjs | smoke 25/25
+- 2026-11-16T09:31:23Z | phase_04 / client_mcp | done | Implemented `bmail` CLI and stdio MCP server, local MIME parsing with links and OTP candidates, and client-side wait. Verified MCP tools and parsed message against the local Worker. | client/**, scripts/smoke.mjs | pnpm build, 26 tests
+- 2026-11-16T09:31:23Z | phase_03 / read_api | done | Implemented config, alias, message list/get/raw routes, token admin routes, cursor paging, dedupe, retention cron, and raw streaming. | worker/src/http.ts, worker/src/db.ts, worker/migrations/0001_init.sql | lint clean
+- 2026-11-16T09:31:23Z | phase_01 / inbound_capture | done | Implemented Worker email handler: env config, alias lookup, silent drop, raw to R2, metadata to D1, DMARC capture, mirror, loop guard. Verified with local email endpoint and 24-check smoke test. | worker/src/*.ts, worker/wrangler.jsonc | smoke 24/24
+- 2026-11-16T09:31:23Z | phase_00 / scaffold | done | Created pnpm workspace (`worker/`, `client/`), TypeScript configs, Vitest, Wrangler config, D1 migration, dev/deploy scripts, README, and `.env.example`. | package.json, pnpm-workspace.yaml, worker/**, client/**, scripts/** | pnpm install ok
+- 2026-11-16T09:21:17Z | pre_phase_01 / free_plan_feature_audit | done | Made Workers Free a hard constraint and trimmed v1 to fit: dropped attachments endpoint/table, read state, threading, per-alias scope, alias update/pause, D1 audit, rate-limit tables, CORS, and HTML rendering; added a feature budget, minimal schema, and the API/MCP surface. | llm-res/INIT.md, llm-res/PHASE.md, llm-res/THREAT.md, .env.example | 18 threats aligned, no domain literals
+- 2026-11-16T09:19:17Z | pre_phase_01 / fixed_domain_mode | done | Second mailbox is a literal address on a second owned Cloudflare zone: added `domain:mode` config (`catch_all` | `fixed`), `bmail_fixed_addresses` with first-inbound auto-create, `create_alias` rejection on fixed domains, modes in `/v1/config`, and a mirror loop guard (t_18). | .env.example, llm-res/INIT.md, llm-res/PHASE.md, llm-res/THREAT.md | no domain literals in docs/config, 18 threats
+- 2026-11-16T09:17:06Z | pre_phase_01 / public_multi_domain | done | Made the project public/self-hosted: removed all deployment literals, added env-driven `bmail_mail_domains` / `bmail_default_mail_domain`, `(mail_domain, local_part)` alias keys, per-domain token scope, and a `mail_domain` parameter on API/CLI/MCP. Added t_16 and t_17. | llm-res/INIT.md, llm-res/PHASE.md, llm-res/THREAT.md, .env.example | no domain literals in new config/docs; env example uses reserved names
+- 2026-11-16T09:17:06Z | pre_phase_01 / history_note | done | Note for release: earlier MEMORY entries still name the original deployment domains. MEMORY is append-only, so they were not edited. Review or exclude `llm-res/` history before publishing. | llm-res/MEMORY.md | no secrets, domains only
+- 2026-11-16T09:14:06Z | pre_phase_01 / free_tier_profile | done | Locked delegated <mail-domain> zone, Workers Free, zero-parse Worker (raw stream to R2, metadata only in D1), client-side MIME parsing, stdio MCP on the agent host, no Durable Objects/Queues/KV. Next: confirm package manager and scaffold. | llm-res/INIT.md, llm-res/PHASE.md, llm-res/THREAT.md | quotas verified against Cloudflare docs 2026-11-16
+- 2026-11-16T09:14:06Z | pre_phase_01 / threat_update | done | Added t_15_free_tier_exhaustion; updated t_01 and t_03 for zero-parse ingest and client-side parsing. | llm-res/THREAT.md | 15 threats, all user_requested=no
+- 2026-11-16T09:10:56Z | pre_phase_01 / dns_check | done | Verified with dig: <zone> uses Cloudflare NS and already has Email Routing MX; <mail-domain> has no NS, so it is a subdomain, not a delegated zone. Catch-all is unavailable on a subdomain, so ingress topology is a blocker. | - | dig only, no changes
+- 2026-11-16T09:10:56Z | pre_phase_01 / project_inputs | done | Recorded bmail / bountyMail, <mail-domain>, 90-day retention, remote agent runtime, and the "efficient over security" priority (flagged, not applied as a downgrade). Next: confirm ingress topology and security profile. | llm-res/INIT.md, llm-res/PHASE.md, llm-res/THREAT.md | threat t_14 added, t_08 updated to 90d
+- 2026-11-16T09:08:00Z | pre_phase_01 / repo_setup | done | Removed the duplicate llm-res/.gitignore now that the corrected file lives at the root; no em dashes remain in project text. Next: rewrite .env.example keys when the stack is confirmed. | llm-res/.gitignore | duplicate removed, tree clean
+- 2026-11-16T09:07:29Z | pre_phase_01 / repo_setup | done | Fixed root .gitignore (it contained ./llm-res/** and would have excluded the rules files); moved .env.example to the project root and replaced an em dash. Next: rewrite .env.example keys when the stack is confirmed. | .gitignore, .env.example | content inspected, no secrets
+- 2026-11-16T09:07:29Z | pre_phase_01 / threat_model_seed | done | Seeded THREAT.md with 13 inbound-only threats (prompt injection, token theft, alias flood, sender spoofing, SSRF via links, retention, mirror leak) and a deferred-surfaces list. Next: implement phase_01 against t_01..t_13. | llm-res/THREAT.md | threat table complete, all user_requested=no
+- 2026-11-16T09:06:20Z | pre_phase_01 / design_system_override | done | Recorded user-approved design system override to Neo Brutalism (reference https://www.neobrutalism.dev/docs) in INIT.md and PHASE.md; v1 stays headless, so the override applies when a web UI phase starts. Next: resolve INIT open questions (name, zone, retention, agent runtime, stack/commands, strict tier) before phase_01. | llm-res/INIT.md, llm-res/PHASE.md, llm-res/MEMORY.md | docs fetched, markdown only, no app code

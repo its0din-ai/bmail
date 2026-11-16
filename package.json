@@ -1,0 +1,25 @@
+{
+  "name": "bmail",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.21.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "pnpm -r build",
+    "lint": "tsc -p worker/tsconfig.json --noEmit && tsc -p client/tsconfig.json --noEmit",
+    "test": "vitest run",
+    "dev": "node scripts/dev.mjs",
+    "deploy": "node scripts/deploy.mjs",
+    "bmail": "node client/dist/cli.js",
+    "smoke": "node scripts/smoke.mjs",
+    "db:migrate:local": "wrangler d1 execute bmail --local --config worker/wrangler.jsonc --file worker/migrations/0001_init.sql"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.12",
+    "wrangler": "^4.162.0"
+  }
+}
