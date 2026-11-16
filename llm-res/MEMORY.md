@@ -16,6 +16,7 @@ Format:
 
 ## Log
 
+- 2026-11-16T11:57:41Z | docs / deploy_button | done | Added a Deploy to Cloudflare button targeting the `worker/` subdirectory of the public repo. Declared `bmail_mail_domains` for deploy prompts, added `.dev.vars.example` for the key, and added `cloudflare.bindings` descriptions. | README.md, worker/package.json, worker/wrangler.jsonc, worker/.dev.vars.example, llm-res/INIT.md, llm-res/PHASE.md | 17 tests, build 12.54 KiB
 - 2026-11-16T11:54:16Z | docs / artex_banner_toc | done | Aligned the banner and README intro with ARTEX, linked the repository, added an ARTEX badge, and added a table of contents. | README.md, assets/banner.svg, llm-res/PHASE.md | SVG and JSON valid, no MCP references
 - 2026-11-16T11:49:00Z | docs / artex_tools | done | Added `artex-custom-tools.json` with list/get/ack HTTP custom tools and README instructions to feed it into the ARTEX chat so the auto agent creates them with `create_custom_tool`. | artex-custom-tools.json, README.md, llm-res/INIT.md, llm-res/PHASE.md, llm-res/THREAT.md | JSON valid, no MCP references in README
 - 2026-11-16T11:44:24Z | cleanup / mcp_removal | done | Removed the `client/` workspace, stdio MCP, HTTP MCP, OpenCode config, MCP deps, MCP docs/banner references, and t_14. The Worker is REST-only; custom tools come later. | client/**, package.json, pnpm-workspace.yaml, pnpm-lock.yaml, README.md, .env.example, assets/banner.svg, llm-res/*.md, vitest.config.ts | 17 tests, build 12.54 KiB

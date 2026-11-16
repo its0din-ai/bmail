@@ -4,6 +4,7 @@
 
 <p align="center">
   <img alt="Cloudflare Workers" src="https://img.shields.io/badge/Cloudflare-Workers-F38020?style=for-the-badge&amp;logo=cloudflare&amp;logoColor=white">
+  <a href="https://deploy.workers.cloudflare.com/?url=https://github.com/its0din-ai/bmail/tree/main/worker"><img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare"></a>
   <img alt="Cloudflare R2" src="https://img.shields.io/badge/Cloudflare-R2-F38020?style=for-the-badge&amp;logo=cloudflare&amp;logoColor=white">
   <img alt="Cloudflare Email Routing" src="https://img.shields.io/badge/Email-Routing-F38020?style=for-the-badge&amp;logo=cloudflare&amp;logoColor=white">
   <img alt="REST API" src="https://img.shields.io/badge/API-REST-111111?style=for-the-badge">
@@ -144,6 +145,14 @@ pnpm deploy:worker
 ```
 
 `pnpm deploy:worker` deploys the Worker, uploads `bmail_api_key` as a secret, and sets the R2 lifecycle rules.
+
+### One-click deploy
+
+The **Deploy to Cloudflare** button next to the Workers badge targets the `worker/` subdirectory of the public `its0din-ai/bmail` repository. It provisions the R2 binding from `worker/wrangler.jsonc` and prompts for `bmail_mail_domains` and `bmail_api_key`.
+
+The repository must be public and pushed for the button to work. After it finishes, configure Email Routing and add the R2 lifecycle rules manually, because the one-click flow does not run `pnpm deploy:worker`.
+
+If the button fails or you use a fork, point the `url` parameter at your public repository's `worker/` directory.
 
 Then in the Cloudflare dashboard:
 

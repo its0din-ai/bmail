@@ -63,7 +63,7 @@ Project initiation record (per `AGENTIC.md` section 0). Fill this **once, before
 
 - Environments (dev/staging/prod): local dev + production Worker per self-hosted deployment
 - Mail domains: **not in code**. `bmail_mail_domains` is a comma-separated allowlist. A domain entry accepts any local part; a full-address entry is exact.
-- Deploy target / mechanism: Cloudflare Workers via Wrangler, Free plan, deployed by tag
+- Deploy target / mechanism: Cloudflare Workers via Wrangler or the Deploy to Cloudflare button targeting the `worker/` subdirectory, Free plan, deployed by tag
 - Retention: `ack_message` deletes the copy immediately after a successful read. `bmail_lifecycle_days` (default 7) sets an R2 lifecycle rule for `mail/` and `latest/` as a safety net.
 
 ## Security
