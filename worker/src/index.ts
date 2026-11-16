@@ -51,6 +51,11 @@ export function parseRecipients(raw: string | undefined): RecipientConfig {
   for (const item of (raw ?? "").split(",")) {
     const entry = item.trim().toLowerCase();
     if (!entry) continue;
+    if (entry.includes("*")) {
+      throw new ConfigError(
+        "wildcards are not supported; use a bare domain to allow every local part",
+      );
+    }
     if (entry.includes("@")) {
       const parts = splitAddress(entry);
       if (!parts) {

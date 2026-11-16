@@ -29,6 +29,12 @@ describe("parseRecipients", () => {
       /invalid recipient/,
     );
   });
+
+  it("rejects wildcard entries with a clear error", () => {
+    expect(() => parseRecipients("*@mail.example.com")).toThrow(/wildcards/);
+    expect(() => parseRecipients("*")).toThrow(/wildcards/);
+    expect(() => parseRecipients("*.mail.example.com")).toThrow(/wildcards/);
+  });
 });
 
 describe("recipientAllowed", () => {

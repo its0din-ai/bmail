@@ -74,6 +74,8 @@ There is no registration step. The Worker accepts addresses that match its recip
 - `mail.example.com` - any local part on that domain.
 - `bbounty@programs.example.net` - exactly that address.
 
+There is no wildcard syntax. Use the bare domain when you want every local part. `*@mail.example.com` and `*` are rejected with a `wildcards are not supported` error.
+
 For example:
 
 ```bash
@@ -453,7 +455,7 @@ Check:
 
 1. The variable exists on the Worker that serves this URL, in the environment you are calling (production vs preview).
 2. The name is exactly `bmail_mail_domains`.
-3. The value is a comma-separated list with no surrounding quotes, for example `mail.example.com,bbounty@programs.example.net`.
+3. The value is a comma-separated list with no surrounding quotes, for example `mail.example.com,bbounty@programs.example.net`. Do not use `*@mail.example.com` or `*`; use the bare domain instead.
 4. Dashboard and Git deploys do not read `.env`. Add the variable under **Settings** > **Variables and Secrets**.
 5. Deploy a new version after changing it.
 6. Run `wrangler tail <worker-name>` and call the endpoint again. The Worker log shows the exact parse error, for example an empty value or an invalid domain.
