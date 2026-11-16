@@ -18,7 +18,7 @@ Seed these from `INIT.md`, fill them in on session start, and confirm with `pwd`
 - Active phase: simplified v0.1.0 complete and verified locally.
 - Hosting: **Cloudflare Workers Free plan**. R2 is the only storage.
 - Current version (SemVer, per AGENTIC.md section 11): **0.1.0**. Not deployed, not tagged.
-- Micro-task just finished: added `ack_message` and `DELETE /v1/inbox/:address/:id` for delete-after-read, plus an R2 lifecycle rule for `mail/` and `latest/`.
+- Micro-task just finished: extended `bmail_mail_domains` to accept domain entries (any local part) and full-address entries (exact), so a catch-all domain and a fixed program address can share the Worker safely.
 - Next micro-task: deploy. Create the R2 bucket, fill `.env`, run `pnpm deploy`, configure Email Routing, then tag `v0.1.0-{commit}`.
 - Current blockers: Cloudflare credentials and the real R2 bucket, final owner name.
 
@@ -33,9 +33,9 @@ Commands that prove the current state builds, lints, and tests clean:
 - Run: `pnpm dev` (127.0.0.1:8787)
 - MCP: `pnpm mcp`
 
-Last verified result: lint clean, 14 tests passing, Worker bundle 9.86 KiB (gzip 3.22 KiB).
+Last verified result: lint clean, 19 tests passing, Worker bundle 10.43 KiB (gzip 3.35 KiB).
 
-Local end-to-end check: delivered mail to two configured domains, listed metadata, fetched raw MIME, rejected a bad key with 401, rejected an unconfigured domain with 403, exercised all four MCP tools including `wait_for_message` with a delayed delivery, verified that a cursor poll returns empty until the latest marker changes, and verified that `ack_message` removes the object and makes the raw read return 404.
+Local end-to-end check: delivered mail to two configured domains, listed metadata, fetched raw MIME, rejected a bad key with 401, rejected an unconfigured domain with 403, exercised all four MCP tools including `wait_for_message` with a delayed delivery, verified that a cursor poll returns empty until the latest marker changes, verified that `ack_message` removes the object and makes the raw read return 404, and verified that a domain entry accepts any local part while an exact entry rejects other local parts.
 
 ## Phase log
 
@@ -47,12 +47,13 @@ Local end-to-end check: delivered mail to two configured domains, listed metadat
 | phase_03 | MCP client | done | `list_messages`, `get_message`, `ack_message`, `wait_for_message` |
 | phase_04 | verification | done | Lint, 14 tests, build, local end-to-end |
 | phase_05 | ack + lifecycle | done | Idempotent delete and R2 lifecycle rules for `mail/` and `latest/` |
+| phase_06 | recipient allowlist | done | Domain entries accept any local part; full-address entries are exact |
 | docs | README + banner | done | Cloudflare product map, architecture, config, API, MCP, free-tier budget |
 | docs | dashboard deploy | done | In-browser editor and Git flow, bindings, lifecycle rules, Email Routing |
 
 ## Decisions & notes
 
-- **Flow.** Pick any address on a configured domain, for example `test@mail.example.com`. There is no registration and no alias table. The agent polls that address with the shared key.
+- **Flow.** Pick an address that matches the allowlist, for example `test@mail.example.com` or `bbounty@programs.example.net`. There is no registration and no alias table. The agent polls that address with the shared key.
 - **Storage.** One R2 object per message at `mail/<address>/<id>.eml`, where `id` is `<13-digit ms>-<12 hex>`, plus one small latest marker per address at `latest/<address>`. The timestamp prefix makes lexicographic order chronological. Ack deletes the message object; a lifecycle rule expires both prefixes after `bmail_lifecycle_days`.
 - **Metadata.** R2 custom metadata stores `from`, an ASCII-safe `subject` preview, `received_at`, `size`, and `dmarc`. The real subject and body are parsed from the raw message by the MCP client, so non-ASCII subjects are preserved there.
 - **Paging.** `GET /v1/inbox/:address?after=<key>&limit=<n>` uses R2 `startAfter`; `next_cursor` is the last object key. Messages are ascending by id.
@@ -60,7 +61,7 @@ Local end-to-end check: delivered mail to two configured domains, listed metadat
 - **Polling cost.** One cursor poll with no new mail is one `head` (Class B). A poll that finds new mail is one `head` plus one `list` (Class A). The MCP `wait_for_message` default interval is 5 seconds, minimum 2 seconds.
 - **Raw access.** `GET /v1/inbox/:address/:id` streams the R2 object as `message/rfc822` with `x-bmail-*` metadata headers.
 - **Auth.** One shared `bmail_api_key`, at least 16 characters, sent as `Authorization: Bearer`. Constant-time compare. The key grants access to every configured address. Health is unauthenticated.
-- **Domains.** `bmail_mail_domains` is a comma-separated allowlist. Addresses outside it return 403. No mode setting: any local part is accepted, and a literal Email Routing rule works the same as a catch-all.
+- **Domains.** `bmail_mail_domains` is a comma-separated allowlist. An entry is either a domain (any local part) or a full address (exact). Addresses outside it return 403. Email Routing decides what reaches the Worker; this allowlist is the second gate.
 - **Validation.** Local parts are restricted to `[a-z0-9._+-]` with no slashes, so an address cannot escape its R2 prefix. Message ids must match `<13 digits>-<12 lowercase alnum>`.
 - **DMARC trust.** Follow the docs: read only the first `Authentication-Results` header, require `mx.cloudflare.net` as its authserv-id, then store its dmarc result. A sender-supplied header that merely mentions Cloudflare is ignored. Tested in `worker/test/index.test.ts`.
 - **MCP.** The server runs on the agent host over stdio and calls the REST API. `postal-mime` parses raw mail locally. `wait_for_message` starts at the current millisecond when `after` is omitted.
@@ -92,5 +93,5 @@ Local end-to-end check: delivered mail to two configured domains, listed metadat
 - Admin UI (Neo Brutalism applies if it is ever built)
 - Outbound mail, replies, and forwarding
 - Worker-hosted MCP and OAuth
-- Rate limiting and abuse controls beyond the domain allowlist
+- Rate limiting and abuse controls beyond the domain/address allowlist
 - Full-text search

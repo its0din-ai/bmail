@@ -1,23 +1,55 @@
 import { describe, expect, it } from "vitest";
 import {
-  parseDomains,
+  parseRecipients,
   readDmarc,
+  recipientAllowed,
   splitAddress,
   timingSafeEqual,
 } from "../src/index";
 
-describe("parseDomains", () => {
-  it("parses a comma-separated list", () => {
-    const domains = parseDomains("mail.example.com, Programs.Example.net");
-    expect([...domains]).toEqual(["mail.example.com", "programs.example.net"]);
+describe("parseRecipients", () => {
+  it("parses domains and exact addresses", () => {
+    const config = parseRecipients(
+      "mail.example.com, Bbounty@Programs.Example.net",
+    );
+    expect([...config.domains]).toEqual(["mail.example.com"]);
+    expect([...config.addresses]).toEqual(["bbounty@programs.example.net"]);
   });
 
   it("rejects an empty list", () => {
-    expect(() => parseDomains("")).toThrow(/empty/);
+    expect(() => parseRecipients("")).toThrow(/empty/);
   });
 
   it("rejects an invalid domain", () => {
-    expect(() => parseDomains("not a domain")).toThrow(/invalid/);
+    expect(() => parseRecipients("not a domain")).toThrow(/invalid/);
+  });
+
+  it("rejects an invalid address entry", () => {
+    expect(() => parseRecipients("a/b@mail.example.com")).toThrow(
+      /invalid recipient/,
+    );
+  });
+});
+
+describe("recipientAllowed", () => {
+  const config = parseRecipients(
+    "mail.example.com,bbounty@programs.example.net",
+  );
+
+  it("allows any local part on a domain entry", () => {
+    expect(recipientAllowed(config, "test@mail.example.com")).toBe(true);
+  });
+
+  it("allows the exact address", () => {
+    expect(recipientAllowed(config, "bbounty@programs.example.net")).toBe(true);
+  });
+
+  it("rejects another address on the same domain", () => {
+    expect(recipientAllowed(config, "other@programs.example.net")).toBe(false);
+  });
+
+  it("rejects a malformed address", () => {
+    expect(recipientAllowed(config, "a/b@mail.example.com")).toBe(false);
   });
 });
 

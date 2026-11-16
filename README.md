@@ -26,7 +26,7 @@ No database, no UI, no aliases. One Worker, one R2 bucket, one shared key.
 | Product | Role in bmail | Free plan note |
 |---|---|---|
 | **Cloudflare Workers** | Runs the `email()` ingest handler and the HTTPS REST API. | 100,000 requests/day, 10 ms CPU per invocation. |
-| **Cloudflare Email Routing** | Receives mail at the domain MX, applies catch-all or literal rules, invokes the Worker, and prepends a trusted `Authentication-Results` header. | Free. 25 MiB inbound limit, 200 routing rules per domain. |
+| **Cloudflare Email Routing** | Receives mail at the domain MX, applies catch-all or literal rules, invokes the Worker, and prepends a trusted `Authentication-Results` header. | Free. 25 MiB inbound limit, 200 routing rules per domain. Routing rules decide what reaches the Worker; bmail applies a second allowlist. |
 | **Cloudflare R2** | Stores `mail/<address>/<id>.eml` and the `latest/<address>` marker. Serves list, head, get, and delete operations. Holds the lifecycle rule. | 10 GB-month, 1M Class A and 10M Class B operations/month, free egress. |
 | **Cloudflare DNS** | Hosts the zone, MX records, and the domain used by Email Routing. | Included with the zone. |
 | **Wrangler** | Local dev, deploy, secret upload, and `r2 bucket lifecycle set`. | CLI. |
@@ -57,7 +57,7 @@ No database, no UI, no aliases. One Worker, one R2 bucket, one shared key.
 
 ## Flow
 
-1. Pick any address on a configured domain, for example `test@mail.example.com`.
+1. Pick an address that matches the allowlist, for example `test@mail.example.com` or `bbounty@programs.example.net`.
 2. Cloudflare Email Routing delivers it to the Worker.
 3. The Worker stores the raw MIME in R2 and updates `latest/<address>`.
 4. The agent polls the REST API or MCP with the shared key.
@@ -65,7 +65,37 @@ No database, no UI, no aliases. One Worker, one R2 bucket, one shared key.
 6. After a successful read, `ack_message` deletes the R2 copy. Your forwarded archive is unaffected.
 7. The R2 lifecycle rule deletes anything the agent did not ack after `bmail_lifecycle_days`.
 
-There is no registration step. Every address on a configured domain is accepted.
+There is no registration step. The Worker accepts addresses that match its recipient allowlist.
+
+## Recipient allowlist
+
+`bmail_mail_domains` accepts two forms:
+
+- `mail.example.com` - any local part on that domain.
+- `bbounty@programs.example.net` - exactly that address.
+
+For example:
+
+```bash
+bmail_mail_domains=mail.example.com,bbounty@programs.example.net
+```
+
+This accepts `test@mail.example.com` and `bbounty@programs.example.net`, but drops `other@programs.example.net`.
+
+Email Routing is the first gate. It decides which mail reaches the Worker:
+
+- A **catch-all** rule sends every local part to the Worker. Pair it with a domain entry.
+- A **literal** rule sends one address to the Worker. Pair it with an exact address entry.
+
+A common setup is one catch-all domain plus one fixed program address:
+
+```text
+mail.example.com          catch-all -> bmail Worker
+bbounty@programs.example.net   literal -> bmail Worker
+programs.example.net      catch-all -> personal inbox (archive)
+```
+
+The literal rule wins over the catch-all, so only `bbounty@programs.example.net` reaches the Worker on that domain.
 
 ## Requirements
 
@@ -89,7 +119,7 @@ pnpm deploy
 
 Then in the Cloudflare dashboard:
 
-1. Enable Email Routing on each domain in `bmail_mail_domains`.
+1. Enable Email Routing on each domain used in `bmail_mail_domains`.
 2. For a catch-all domain, set the catch-all action to the `bmail` Worker.
 3. For a single address, create one literal routing rule to the `bmail` Worker.
 4. If you want a personal archive, do not give the same rule two actions. Either use a literal rule for the agent address and leave the catch-all forwarding to your inbox, or run bmail on a separate subdomain with its own catch-all.
@@ -155,7 +185,7 @@ In the Worker settings:
   - Bucket: the bucket you created
   - Skip this if you used the Git flow; `worker/wrangler.jsonc` already declares the binding.
 - **Variables and Secrets**:
-  - `bmail_mail_domains` as text: a comma-separated list, for example `mail.example.com`
+  - `bmail_mail_domains` as text: a comma-separated allowlist. A domain accepts any local part; a full address is exact. For example `mail.example.com,bbounty@programs.example.net`
   - `bmail_api_key` as a secret: at least 16 random characters
 
 Save and deploy. The API returns `503` until the binding and key exist.
@@ -203,7 +233,7 @@ Use `https://<worker-url>` as `bmail_api_url` in the MCP config. The following v
 
 | Key | Used by | Purpose |
 |---|---|---|
-| `bmail_mail_domains` | Worker | Comma-separated allowlist of accepted domains. |
+| `bmail_mail_domains` | Worker | Comma-separated allowlist. Domain entries accept any local part; full-address entries are exact. |
 | `bmail_api_key` | Worker and MCP | Shared bearer key, 16+ characters. |
 | `bmail_lifecycle_days` | Deploy | R2 expiry for `mail/` and `latest/`, default 7. |
 | `cloudflare_worker_name` | Deploy | Worker name. |

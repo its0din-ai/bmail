@@ -16,6 +16,7 @@ Format:
 
 ## Log
 
+- 2026-11-16T10:17:53Z | phase_06 / recipient_allowlist | done | Extended `bmail_mail_domains` to accept a domain (any local part) or a full address (exact). Email Routing remains the first gate; the Worker enforces the same scope. Verified domain, exact, and denied paths, plus deploy dry run. | worker/src/index.ts, worker/test/index.test.ts, README.md, .env.example, llm-res/INIT.md, llm-res/PHASE.md, llm-res/THREAT.md | lint clean, 19 tests, bundle 10.43 KiB
 - 2026-11-16T10:07:47Z | docs / dashboard_deploy | done | Added a Cloudflare dashboard deployment guide covering the in-browser editor and Git flow, bindings and variables, compatibility date, manual R2 lifecycle rules, Email Routing, the archive caveat, and verification. | README.md, llm-res/PHASE.md | fences balanced, no em dashes
 - 2026-11-16T10:04:16Z | docs / banner_style | done | Replaced the neobrutalist banner with a light minimal layout: hairline rules, restrained type, thin data-path diagram, and a single Cloudflare orange accent. | assets/banner.svg | SVG XML valid
 - 2026-11-16T10:01:52Z | docs / readme_banner | done | Rewrote the root README with a Cloudflare product map, architecture, config, API, MCP, ack/lifecycle, and free-tier budget. Added `assets/banner.svg`. | README.md, assets/banner.svg, llm-res/PHASE.md | SVG XML valid, no deployment literals

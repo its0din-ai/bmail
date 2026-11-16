@@ -1,0 +1,25 @@
+# Copy to .env and fill in real values. Never commit .env.
+# Keys are snake_case - see AGENTIC.md naming rules.
+#
+# The Worker cannot read .env at runtime. `pnpm dev` writes worker/.dev.vars,
+# and `pnpm deploy` maps these values to Worker vars and secrets.
+
+# Comma-separated domains the Worker accepts.
+# Example: mail.example.com,programs.example.net
+bmail_mail_domains=
+
+# Shared key for the REST API and the MCP server. 16+ characters, random.
+bmail_api_key=
+
+# Deploy only (not read by the Worker at runtime).
+cloudflare_account_id=
+cloudflare_worker_name=bmail
+cloudflare_r2_bucket_name=bmail-mail
+# Delete mail/ and latest/ objects after this many days (R2 lifecycle).
+bmail_lifecycle_days=7
+
+# MCP client only (not read by the Worker).
+# Example: https://bmail.example.workers.dev
+bmail_api_url=
+# Optional default address for MCP tools.
+bmail_address=

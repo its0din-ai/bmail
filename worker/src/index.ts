@@ -40,20 +40,46 @@ export function timingSafeEqual(left: string, right: string): boolean {
   return difference === 0;
 }
 
-export function parseDomains(raw: string | undefined): Set<string> {
+export interface RecipientConfig {
+  domains: Set<string>;
+  addresses: Set<string>;
+}
+
+export function parseRecipients(raw: string | undefined): RecipientConfig {
   const domains = new Set<string>();
+  const addresses = new Set<string>();
   for (const item of (raw ?? "").split(",")) {
-    const domain = item.trim().toLowerCase();
-    if (!domain) continue;
-    if (!DOMAIN_RE.test(domain)) {
-      throw new ConfigError(`invalid mail domain: ${domain}`);
+    const entry = item.trim().toLowerCase();
+    if (!entry) continue;
+    if (entry.includes("@")) {
+      const parts = splitAddress(entry);
+      if (!parts) {
+        throw new ConfigError(`invalid recipient address: ${entry}`);
+      }
+      addresses.add(`${parts.local_part}@${parts.mail_domain}`);
+    } else {
+      if (!DOMAIN_RE.test(entry)) {
+        throw new ConfigError(`invalid mail domain: ${entry}`);
+      }
+      domains.add(entry);
     }
-    domains.add(domain);
   }
-  if (domains.size === 0) {
+  if (domains.size === 0 && addresses.size === 0) {
     throw new ConfigError("bmail_mail_domains is empty");
   }
-  return domains;
+  return { domains, addresses };
+}
+
+export function recipientAllowed(
+  config: RecipientConfig,
+  address: string,
+): boolean {
+  const parts = splitAddress(address);
+  if (!parts) return false;
+  return (
+    config.addresses.has(`${parts.local_part}@${parts.mail_domain}`) ||
+    config.domains.has(parts.mail_domain)
+  );
 }
 
 export function splitAddress(
@@ -231,9 +257,9 @@ async function handleFetch(request: Request, env: Env): Promise<Response> {
     return json({ ok: true, version: "0.1.0" });
   }
 
-  let domains: Set<string>;
+  let recipients: RecipientConfig;
   try {
-    domains = parseDomains(env.bmail_mail_domains);
+    recipients = parseRecipients(env.bmail_mail_domains);
   } catch (error) {
     const message =
       error instanceof ConfigError ? error.message : "invalid configuration";
@@ -266,8 +292,7 @@ async function handleFetch(request: Request, env: Env): Promise<Response> {
     return fail("invalid_address", "Invalid address", 400);
   }
 
-  const parts = splitAddress(address);
-  if (!parts || !domains.has(parts.mail_domain)) {
+  if (!recipientAllowed(recipients, address)) {
     return fail("invalid_address", "Address is not allowed", 403);
   }
 
@@ -287,9 +312,9 @@ async function handleEmail(
   message: ForwardableEmailMessage,
   env: Env,
 ): Promise<void> {
-  let domains: Set<string>;
+  let recipients: RecipientConfig;
   try {
-    domains = parseDomains(env.bmail_mail_domains);
+    recipients = parseRecipients(env.bmail_mail_domains);
   } catch (error) {
     const detail =
       error instanceof ConfigError ? error.message : "invalid configuration";
@@ -298,8 +323,7 @@ async function handleEmail(
   }
 
   const address = message.to.trim().toLowerCase();
-  const parts = splitAddress(address);
-  if (!parts || !domains.has(parts.mail_domain)) {
+  if (!recipientAllowed(recipients, address)) {
     return;
   }
 
