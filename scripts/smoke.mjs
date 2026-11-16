@@ -68,6 +68,14 @@ async function call(path, options = {}) {
 async function main() {
   const health = await call("/health");
   check("health endpoint", health.status === 200 && health.json?.ok === true, health.status);
+  check(
+    "worker ready",
+    health.json?.ready === true,
+    JSON.stringify(health.json?.checks ?? {}),
+  );
+  if (health.json?.ready !== true) {
+    console.log("health checks:", JSON.stringify(health.json?.checks ?? {}));
+  }
 
   const badKey = await fetch(
     `${api}/v1/inbox/${encodeURIComponent(address)}`,

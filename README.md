@@ -192,6 +192,8 @@ In the Worker settings:
   - `bmail_mail_domains` as text: a comma-separated allowlist. A domain accepts any local part; a full address is exact. For example `mail.example.com,bbounty@programs.example.net`
   - `bmail_api_key` as a secret: at least 16 random characters
 
+Do not add `cloudflare_r2_bucket_name` as a Worker variable. It is only read by `pnpm deploy:worker`; the dashboard path uses the R2 binding instead.
+
 Save and deploy. The API returns `503` until the binding and key exist.
 
 ### 5. Set the compatibility date
@@ -315,7 +317,7 @@ A deployed Worker cannot inject mail into Email Routing, so the real email is re
 
 ### Manual checklist
 
-1. `GET /health` returns `{ "ok": true }`.
+1. `GET /health` returns `{ "ok": true, "ready": true }` and all three checks are true.
 2. Send a message with a unique subject.
 3. `GET /v1/inbox/<address>` returns metadata; copy the `id`.
 4. `GET /v1/inbox/<address>/<id>` returns the raw MIME with your marker.
@@ -437,6 +439,29 @@ llm-res/    agent rules, phase state, memory, threat model
 - The forwarded personal archive is the source of truth. Ack only removes the R2 copy.
 
 ## Troubleshooting
+
+### `ready: false` on `/health`
+
+`GET /health` reports the three runtime prerequisites:
+
+```json
+{
+  "ok": true,
+  "ready": false,
+  "version": "0.1.0",
+  "checks": {
+    "bmail_mail_domains": true,
+    "bmail_api_key": true,
+    "r2_binding": false
+  }
+}
+```
+
+- `r2_binding: false` - add an **R2 bucket binding** with variable name `MAIL`. An environment variable named `cloudflare_r2_bucket_name` is not a binding and the Worker does not read it.
+- `bmail_mail_domains: false` - the variable is missing, empty, or has an invalid entry.
+- `bmail_api_key: false` - the secret is missing or shorter than 16 characters.
+
+Make the change, deploy a new version, and call `/health` again.
 
 ### `config_invalid`
 

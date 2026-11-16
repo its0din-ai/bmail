@@ -259,7 +259,25 @@ async function handleAck(
 async function handleFetch(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   if (request.method === "GET" && url.pathname === "/health") {
-    return json({ ok: true, version: "0.1.0" });
+    let mailDomainsOk = false;
+    try {
+      parseRecipients(env.bmail_mail_domains);
+      mailDomainsOk = true;
+    } catch {
+      mailDomainsOk = false;
+    }
+    const apiKeyOk = Boolean(apiKeyFromEnv(env));
+    const r2Ok = Boolean(env.MAIL);
+    return json({
+      ok: true,
+      ready: mailDomainsOk && apiKeyOk && r2Ok,
+      version: "0.1.0",
+      checks: {
+        bmail_mail_domains: mailDomainsOk,
+        bmail_api_key: apiKeyOk,
+        r2_binding: r2Ok,
+      },
+    });
   }
 
   let recipients: RecipientConfig;
