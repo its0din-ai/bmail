@@ -69,13 +69,15 @@ export function splitAddress(
 }
 
 export function readDmarc(headers: Headers): string {
-  for (const [name, value] of headers) {
-    if (name.toLowerCase() !== "authentication-results") continue;
-    if (!value.toLowerCase().includes("mx.cloudflare.net")) continue;
-    const match = /\bdmarc\s*=\s*([a-z]+)/i.exec(value);
-    return match?.[1]?.toLowerCase() ?? "none";
-  }
-  return "none";
+  const value = headers.get("authentication-results");
+  if (!value) return "none";
+
+  // Email Routing prepends its own header. Only the first one is trustworthy.
+  const first = value.trim();
+  if (!/^mx\.cloudflare\.net(?:\s*;|\s*$)/i.test(first)) return "none";
+
+  const match = /\bdmarc\s*=\s*([a-z]+)/i.exec(first);
+  return match?.[1]?.toLowerCase() ?? "none";
 }
 
 function messagePrefix(address: string): string {

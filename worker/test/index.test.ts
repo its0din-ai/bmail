@@ -45,10 +45,37 @@ describe("readDmarc", () => {
     expect(readDmarc(headers)).toBe("pass");
   });
 
-  it("ignores sender-supplied headers", () => {
+  it("ignores a sender header that merely contains the Cloudflare name", () => {
     const headers = new Headers();
-    headers.set("Authentication-Results", "mx.evil.example; dmarc=pass");
+    headers.set(
+      "Authentication-Results",
+      "mx.evil.example; mx.cloudflare.net; dmarc=pass",
+    );
     expect(readDmarc(headers)).toBe("none");
+  });
+
+  it("ignores a forged header placed before the Cloudflare header", () => {
+    const headers = new Headers();
+    headers.append("Authentication-Results", "mx.evil.example; dmarc=pass");
+    headers.append(
+      "Authentication-Results",
+      "mx.cloudflare.net; spf=pass; dkim=pass; dmarc=fail",
+    );
+    expect(readDmarc(headers)).toBe("none");
+  });
+
+  it("trusts the first header when Cloudflare prepends it", () => {
+    const headers = new Headers();
+    headers.append(
+      "Authentication-Results",
+      "mx.cloudflare.net; spf=pass; dkim=pass; dmarc=pass",
+    );
+    headers.append("Authentication-Results", "mx.evil.example; dmarc=fail");
+    expect(readDmarc(headers)).toBe("pass");
+  });
+
+  it("returns none when the header is absent", () => {
+    expect(readDmarc(new Headers())).toBe("none");
   });
 });
 

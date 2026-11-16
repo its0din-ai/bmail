@@ -16,6 +16,7 @@ Format:
 
 ## Log
 
+- 2026-11-16T09:42:37Z | phase_04 / dmarc_docs_alignment | done | Changed `readDmarc` to trust only the first `Authentication-Results` header with `mx.cloudflare.net` as authserv-id, matching the Cloudflare docs, and added forged-header tests. | worker/src/index.ts, worker/test/index.test.ts, llm-res/THREAT.md, llm-res/PHASE.md | 14 tests pass
 - 2026-11-16T09:40:21Z | phase_04 / verify | done | Verified local ingest on two domains, list and raw routes, 401 for a bad key, 403 for an unconfigured domain, all three MCP tools including a delayed wait, and the deploy dry run. | - | lint clean, 11 tests, bundle 8.78 KiB
 - 2026-11-16T09:40:21Z | phase_03 / simplify | done | Dropped D1, aliases, retention, tokens, mirror, UI, and cron. Replaced them with an R2-only inbox: one object per message, shared `bmail_api_key`, list/raw routes, and three MCP tools. Deleted the old Worker modules, migrations, scripts, and tests. | worker/**, client/**, scripts/**, README.md, .env.example | pnpm build ok
 - 2026-11-16T09:32:50Z | maintenance / public_release_redaction | done | Redacted deployment domain names in older log entries to placeholders before the public commit, superseding the 09:17 history note. This is a deliberate privacy edit of historical entries. | llm-res/MEMORY.md | no deployment literals remain

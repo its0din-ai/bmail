@@ -57,6 +57,7 @@ Local end-to-end check: delivered mail to two configured domains, listed metadat
 - **Auth.** One shared `bmail_api_key`, at least 16 characters, sent as `Authorization: Bearer`. Constant-time compare. The key grants access to every configured address. Health is unauthenticated.
 - **Domains.** `bmail_mail_domains` is a comma-separated allowlist. Addresses outside it return 403. No mode setting: any local part is accepted, and a literal Email Routing rule works the same as a catch-all.
 - **Validation.** Local parts are restricted to `[a-z0-9._+-]` with no slashes, so an address cannot escape its R2 prefix. Message ids must match `<13 digits>-<12 lowercase alnum>`.
+- **DMARC trust.** Follow the docs: read only the first `Authentication-Results` header, require `mx.cloudflare.net` as its authserv-id, then store its dmarc result. A sender-supplied header that merely mentions Cloudflare is ignored. Tested in `worker/test/index.test.ts`.
 - **MCP.** The server runs on the agent host over stdio and calls the REST API. `postal-mime` parses raw mail locally. `wait_for_message` starts at the current millisecond when `after` is omitted.
 - **No retention.** The operator can add an R2 lifecycle rule if needed. This is a deliberate deferral, not a missing job.
 - **No D1, no cron, no Durable Objects, no Queues, no KV.** R2 only.
