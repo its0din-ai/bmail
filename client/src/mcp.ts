@@ -130,14 +130,14 @@ export async function startMcpServer(
           .describe("Recipient address. Defaults to bmail_address when set."),
         after: z.string().optional(),
         timeout_seconds: z.number().int().min(1).max(120).optional(),
-        interval_seconds: z.number().int().min(1).max(30).optional(),
+        interval_seconds: z.number().int().min(2).max(30).optional(),
       },
     },
     async (args) => {
       try {
         const address = resolveAddress(args.address);
         const timeout = clamp(args.timeout_seconds ?? 30, 1, 120);
-        const interval = clamp(args.interval_seconds ?? 5, 1, 30);
+        const interval = clamp(args.interval_seconds ?? 5, 2, 30);
         let cursor = args.after ?? `mail/${address}/${Date.now()}`;
         const deadline = Date.now() + timeout * 1000;
 

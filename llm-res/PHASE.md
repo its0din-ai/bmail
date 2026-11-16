@@ -54,7 +54,7 @@ Local end-to-end check: delivered mail to two configured domains, listed metadat
 - **Metadata.** R2 custom metadata stores `from`, an ASCII-safe `subject` preview, `received_at`, `size`, and `dmarc`. The real subject and body are parsed from the raw message by the MCP client, so non-ASCII subjects are preserved there.
 - **Paging.** `GET /v1/inbox/:address?after=<key>&limit=<n>` uses R2 `startAfter`; `next_cursor` is the last object key. Messages are ascending by id.
 - **Latest marker.** Ingest writes `latest/<address>` with the last message key after writing the message. A cursor poll first does `head` on that marker: if the marker is not newer than `after`, it returns empty without `ListObjects`. This keeps polls on R2 Class B and saves Class A for actual new mail.
-- **Polling cost.** One cursor poll with no new mail is one `head` (Class B). A poll that finds new mail is one `head` plus one `list` (Class A). The MCP `wait_for_message` default interval is 5 seconds.
+- **Polling cost.** One cursor poll with no new mail is one `head` (Class B). A poll that finds new mail is one `head` plus one `list` (Class A). The MCP `wait_for_message` default interval is 5 seconds, minimum 2 seconds.
 - **Raw access.** `GET /v1/inbox/:address/:id` streams the R2 object as `message/rfc822` with `x-bmail-*` metadata headers.
 - **Auth.** One shared `bmail_api_key`, at least 16 characters, sent as `Authorization: Bearer`. Constant-time compare. The key grants access to every configured address. Health is unauthenticated.
 - **Domains.** `bmail_mail_domains` is a comma-separated allowlist. Addresses outside it return 403. No mode setting: any local part is accepted, and a literal Email Routing rule works the same as a catch-all.

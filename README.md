@@ -121,7 +121,7 @@ The design is sized for the Workers Free and R2 Free tiers.
 
 A cursor poll does not call `ListObjects` unless the latest marker says something newer exists. That keeps polling cheap.
 
-At a 5-second poll interval, one hour of waiting is 720 requests. That is about 21,600 requests per month if you wait one hour per day. R2 Free includes 1M Class A operations, 10M Class B operations, and 10 GB-month of storage. The Workers Free plan includes 100,000 requests per day.
+The default poll interval is 5 seconds, with a 2-second minimum. At 5 seconds, one hour of waiting is 720 requests. That is about 21,600 requests per month if you wait one hour per day. R2 Free includes 1M Class A operations, 10M Class B operations, and 10 GB-month of storage. The Workers Free plan includes 100,000 requests per day.
 
 Storage is the only unbounded part because there is no retention. If you want a hard cap, add an R2 lifecycle rule, for example delete objects under `mail/` after 7 or 30 days.
 
