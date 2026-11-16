@@ -148,7 +148,7 @@ pnpm deploy:worker
 
 ### One-click deploy
 
-The **Deploy to Cloudflare** button next to the Workers badge targets the public `its0din-ai/bmail` repository. It provisions the R2 binding from `wrangler.jsonc` and prompts for `bmail_mail_domains` and `bmail_api_key`.
+The **Deploy to Cloudflare** button next to the Workers badge targets the public `its0din-ai/bmail` repository. It provisions the R2 binding from `wrangler.jsonc`. Set `bmail_mail_domains` and `bmail_api_key` in **Settings** > **Variables and Secrets** after it finishes.
 
 The repository must be public and pushed for the button to work. After it finishes, configure Email Routing and add the R2 lifecycle rules manually, because the one-click flow does not run `pnpm deploy:worker`.
 
@@ -267,6 +267,13 @@ curl 'https://<worker-url>/v1/inbox/test%40mail.example.com' \
 The following values are only used by the CLI deploy script, so you can leave them out of the dashboard path: `bmail_lifecycle_days`, `cloudflare_worker_name`, `cloudflare_r2_bucket_name`, `cloudflare_account_id`.
 
 ## Configuration
+
+### Runtime variables and secrets
+
+- `bmail_mail_domains` is a plaintext runtime variable. Set it in **Settings** > **Variables and Secrets**. `wrangler.jsonc` sets `keep_vars: true`, so a deploy does not delete it.
+- `bmail_api_key` must be a runtime **secret**, not a build secret. Deploys do not delete secrets.
+- **Build** variables and secrets are available only during the build. The Worker cannot read them with `env.*`.
+- Do not add `bmail_api_key` to `vars` or commit it.
 
 `.env` is the source of truth. `pnpm dev` writes `.dev.vars`; `pnpm deploy:worker` maps the values to Worker vars and secrets.
 

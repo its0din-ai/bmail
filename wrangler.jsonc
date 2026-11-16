@@ -3,9 +3,7 @@
   "name": "bmail",
   "main": "src/index.ts",
   "compatibility_date": "2026-03-12",
-  "vars": {
-    "bmail_mail_domains": ""
-  },
+  "keep_vars": true,
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1,
