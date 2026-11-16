@@ -16,6 +16,7 @@ Format:
 
 ## Log
 
+- 2026-11-16T10:28:20Z | docs / sanity_check | done | Added `scripts/smoke.mjs` and a README sanity-check section. Local mode injects a test email; deployed mode prints a unique subject and waits for a real email. Verifies health, 401, 403, list, raw, ack, 404, and list removal. | scripts/smoke.mjs, README.md, .env.example, package.json, llm-res/INIT.md, llm-res/PHASE.md | smoke 9/9 local
 - 2026-11-16T10:24:41Z | fix / workspace_deploy | done | Renamed the root `deploy` script to `deploy:worker` to avoid pnpm's built-in `deploy` command, and documented the Cloudflare workspace error: set the Git project root directory to `worker`. | package.json, README.md, .env.example, llm-res/INIT.md, llm-res/PHASE.md | deploy dry run passes
 - 2026-11-16T10:22:14Z | docs / env_example | done | Clarified that `bmail_lifecycle_days` and the `cloudflare_*` keys are CLI deploy only, noted the 7-day default, and aligned the deploy comment with the dashboard path. | .env.example, README.md, llm-res/PHASE.md | no code change
 - 2026-11-16T10:17:53Z | phase_06 / recipient_allowlist | done | Extended `bmail_mail_domains` to accept a domain (any local part) or a full address (exact). Email Routing remains the first gate; the Worker enforces the same scope. Verified domain, exact, and denied paths, plus deploy dry run. | worker/src/index.ts, worker/test/index.test.ts, README.md, .env.example, llm-res/INIT.md, llm-res/PHASE.md, llm-res/THREAT.md | lint clean, 19 tests, bundle 10.43 KiB

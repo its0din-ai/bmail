@@ -13,6 +13,7 @@
     "test": "vitest run",
     "dev": "node scripts/dev.mjs",
     "deploy:worker": "node scripts/deploy.mjs",
+    "smoke": "node scripts/smoke.mjs",
     "mcp": "node client/dist/mcp.js"
   },
   "devDependencies": {

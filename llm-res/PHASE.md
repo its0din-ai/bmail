@@ -31,9 +31,10 @@ Commands that prove the current state builds, lints, and tests clean:
 - Lint: `pnpm lint`
 - Test: `pnpm test`
 - Run: `pnpm dev` (127.0.0.1:8787)
+- Smoke: `pnpm smoke` (needs `bmail_api_url`, `bmail_api_key`, `bmail_address`)
 - MCP: `pnpm mcp`
 
-Last verified result: lint clean, 19 tests passing, Worker bundle 10.43 KiB (gzip 3.35 KiB).
+Last verified result: lint clean, 19 tests passing, Worker bundle 10.43 KiB (gzip 3.35 KiB), smoke test 9/9 passing locally.
 
 Local end-to-end check: delivered mail to two configured domains, listed metadata, fetched raw MIME, rejected a bad key with 401, rejected an unconfigured domain with 403, exercised all four MCP tools including `wait_for_message` with a delayed delivery, verified that a cursor poll returns empty until the latest marker changes, verified that `ack_message` removes the object and makes the raw read return 404, and verified that a domain entry accepts any local part while an exact entry rejects other local parts.
 
@@ -52,6 +53,7 @@ Local end-to-end check: delivered mail to two configured domains, listed metadat
 | docs | dashboard deploy | done | In-browser editor and Git flow, bindings, lifecycle rules, Email Routing |
 | docs | env example | done | Marked lifecycle and cloudflare keys as CLI deploy only |
 | fix | workspace deploy | done | `deploy:worker` script name; Git project root must be `worker` |
+| docs | sanity check | done | `pnpm smoke` plus manual health, mail, raw, ack, and MCP checks |
 
 ## Decisions & notes
 

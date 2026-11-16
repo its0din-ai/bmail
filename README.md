@@ -241,8 +241,9 @@ Use `https://<worker-url>` as `bmail_api_url` in the MCP config. The following v
 | `cloudflare_worker_name` | Deploy | Worker name. |
 | `cloudflare_r2_bucket_name` | Deploy | R2 bucket name. |
 | `cloudflare_account_id` | Deploy | Optional account id. |
-| `bmail_api_url` | MCP | Worker base URL. |
-| `bmail_address` | MCP | Optional default address for tools. |
+| `bmail_api_url` | MCP and smoke test | Worker base URL. |
+| `bmail_address` | MCP and smoke test | Optional default address for tools and the smoke test. |
+| `bmail_local_email_url` | Smoke test | Optional local email injection base. Defaults to `bmail_api_url` when it is localhost. |
 
 ## Local development
 
@@ -268,6 +269,80 @@ Read it:
 
 ```bash
 curl 'http://127.0.0.1:8787/v1/inbox/test%40mail.example.com' \
+  -H "authorization: Bearer $bmail_api_key"
+```
+
+## Sanity check
+
+### Local, automatic
+
+```bash
+# terminal 1
+pnpm dev
+
+# terminal 2
+bmail_api_url=http://127.0.0.1:8787 \
+bmail_api_key=<your key> \
+bmail_address=test@mail.example.com \
+pnpm smoke
+```
+
+On a local API the script injects a test email through `/cdn-cgi/handler/email`, then checks:
+
+- `/health`
+- wrong key returns 401
+- unlisted address returns 403
+- message appears in the list
+- raw MIME contains the marker
+- ack returns 204
+- raw after ack returns 404
+- the message disappears from the list
+
+### Deployed, automatic
+
+```bash
+bmail_api_url=https://<worker-url> \
+bmail_api_key=<your key> \
+bmail_address=test@mail.example.com \
+pnpm smoke
+```
+
+The script prints a unique subject and waits up to 90 seconds. Send a real email from any mailbox to that address with that exact subject. It then runs the same list, raw, and ack checks.
+
+A deployed Worker cannot inject mail into Email Routing, so the real email is required.
+
+### Manual checklist
+
+1. `GET /health` returns `{ "ok": true }`.
+2. Send a message with a unique subject.
+3. `GET /v1/inbox/<address>` returns metadata; copy the `id`.
+4. `GET /v1/inbox/<address>/<id>` returns the raw MIME with your marker.
+5. `DELETE /v1/inbox/<address>/<id>` returns `204`.
+6. The raw route now returns `404`, and the list no longer contains that id.
+7. R2 > your bucket > Objects: the object count drops after ack.
+8. Compute > Email Service > Email Routing > Activity log: the message shows `Handled` plus SPF, DKIM, and DMARC results.
+9. Wrong key returns `401`. An address outside the allowlist returns `403`.
+10. If you use an exact address entry, send to a different local part on that domain. It should be dropped and never appear in the list.
+11. MCP: run `list_messages`, `get_message`, `ack_message`, and `wait_for_message` from your agent, or use the Inspector:
+    ```bash
+    bmail_api_url=https://<worker-url> \
+    bmail_api_key=<your key> \
+    bmail_address=test@mail.example.com \
+    npx @modelcontextprotocol/inspector node client/dist/mcp.js
+    ```
+
+Example curl checks:
+
+```bash
+curl https://<worker-url>/health
+
+curl 'https://<worker-url>/v1/inbox/test%40mail.example.com' \
+  -H "authorization: Bearer $bmail_api_key"
+
+curl 'https://<worker-url>/v1/inbox/test%40mail.example.com/<id>' \
+  -H "authorization: Bearer $bmail_api_key"
+
+curl -X DELETE 'https://<worker-url>/v1/inbox/test%40mail.example.com/<id>' \
   -H "authorization: Bearer $bmail_api_key"
 ```
 
@@ -344,7 +419,7 @@ The default poll interval is 5 seconds, with a 2-second minimum. At 5 seconds, o
 ```text
 worker/     Cloudflare Worker: email() ingest and REST API
 client/     MCP server: REST client plus local MIME parsing
-scripts/    dev and deploy helpers
+scripts/    dev, deploy, and smoke helpers
 assets/     README banner
 llm-res/    agent rules, phase state, memory, threat model
 ```

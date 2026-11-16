@@ -56,6 +56,7 @@ Project initiation record (per `AGENTIC.md` section 0). Fill this **once, before
 - Test: `pnpm test`
 - Run dev (bind 127.0.0.1 only): `pnpm dev`
 - Run prod: `pnpm deploy:worker`
+- Smoke test: `pnpm smoke` (requires a running Worker and `bmail_api_url`, `bmail_api_key`, `bmail_address`)
 - MCP server: `pnpm mcp` or `node client/dist/mcp.js`
 
 ## Environments & release
