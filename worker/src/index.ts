@@ -264,7 +264,11 @@ async function handleFetch(request: Request, env: Env): Promise<Response> {
     const message =
       error instanceof ConfigError ? error.message : "invalid configuration";
     console.error(`bmail: ${message}`);
-    return fail("config_invalid", "Server mail configuration is invalid", 503);
+    return fail(
+      "config_invalid",
+      "bmail_mail_domains is missing or invalid",
+      503,
+    );
   }
 
   const apiKey = apiKeyFromEnv(env);

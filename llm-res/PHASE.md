@@ -54,6 +54,7 @@ Local end-to-end check: delivered mail to two configured domains, listed metadat
 | docs | env example | done | Marked lifecycle and cloudflare keys as CLI deploy only |
 | fix | workspace deploy | done | `deploy:worker` script name; Git project root must be `worker` |
 | docs | sanity check | done | `pnpm smoke` plus manual health, mail, raw, ack, and MCP checks |
+| fix | config error | done | `config_invalid` names `bmail_mail_domains`; troubleshooting for `.env` vs dashboard |
 
 ## Decisions & notes
 

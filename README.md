@@ -434,6 +434,45 @@ llm-res/    agent rules, phase state, memory, threat model
 - MIME parsing happens in the MCP client, not in the Worker.
 - The forwarded personal archive is the source of truth. Ack only removes the R2 copy.
 
+## Troubleshooting
+
+### `config_invalid`
+
+```json
+{
+  "error": {
+    "code": "config_invalid",
+    "message": "bmail_mail_domains is missing or invalid"
+  }
+}
+```
+
+The Worker parses `bmail_mail_domains` before it checks the API key, so this error is not about the key.
+
+Check:
+
+1. The variable exists on the Worker that serves this URL, in the environment you are calling (production vs preview).
+2. The name is exactly `bmail_mail_domains`.
+3. The value is a comma-separated list with no surrounding quotes, for example `mail.example.com,bbounty@programs.example.net`.
+4. Dashboard and Git deploys do not read `.env`. Add the variable under **Settings** > **Variables and Secrets**.
+5. Deploy a new version after changing it.
+6. Run `wrangler tail <worker-name>` and call the endpoint again. The Worker log shows the exact parse error, for example an empty value or an invalid domain.
+
+A CLI deploy also passes `bmail_mail_domains` from `.env` with `--var`, so make sure `.env` has the value you want for that deployment.
+
+### `unauthorized`
+
+```json
+{
+  "error": {
+    "code": "unauthorized",
+    "message": "Missing or invalid API key"
+  }
+}
+```
+
+Check `Authorization: Bearer <bmail_api_key>`. The key must match the Worker secret exactly and be at least 16 characters.
+
 ## Limits
 
 - Inbound message size is capped by Cloudflare at 25 MiB.
