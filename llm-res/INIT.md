@@ -26,6 +26,7 @@ Project initiation record (per `AGENTIC.md` section 0). Fill this **once, before
 - Key third-party dependencies: Worker runtime: none. MCP client: `postal-mime`, `@modelcontextprotocol/sdk`, `zod`
 - Why this stack: Email Routing invokes a Worker directly, R2 stores raw MIME without a database, and the MCP client parses mail on the agent host so the Worker stays tiny.
 - Configuration: `.env` is the source of truth. `pnpm dev` writes `worker/.dev.vars`; `pnpm deploy:worker` maps values to Worker vars and the secret.
+- Observability: Workers Logs enabled in `worker/wrangler.jsonc` with 100% sampling, invocation logs, and persistence. Workers Free includes 200,000 log events/day and 3-day retention. No message body or API key is logged by bmail.
 
 ## Design system
 

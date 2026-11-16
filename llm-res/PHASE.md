@@ -59,6 +59,7 @@ Local end-to-end check: delivered mail to two configured domains, listed metadat
 | fix | health readiness | done | `/health` reports present/valid for vars and the R2 binding |
 | fix | email ingest logging | done | Received/stored/R2 failure logs and missing-binding guard |
 | fix | R2 binding check | done | Health and ingest verify `MAIL` is an R2 binding, not a variable |
+| ops | observability | done | Workers Logs enabled with invocation logs, persistence, 3-day Free retention |
 
 ## Decisions & notes
 
@@ -79,6 +80,7 @@ Local end-to-end check: delivered mail to two configured domains, listed metadat
 - **No D1, no cron, no Durable Objects, no Queues, no KV.** R2 only.
 - **Free plan.** Ingest is two R2 Class A puts (message plus marker); listing is one list; raw reads are one get; ack is a free delete. The daily request cap and R2 free quota are the backstops.
 - **Config path.** `.env` is the source of truth. `scripts/dev.mjs` writes `worker/.dev.vars`; `scripts/deploy.mjs` generates a temporary Wrangler config, deploys `bmail_mail_domains` as a var, and sets `bmail_api_key` as a secret.
+- **Observability.** `worker/wrangler.jsonc` enables Workers Logs with `enabled: true`, `head_sampling_rate: 1`, and `logs.enabled`, `logs.invocation_logs`, `logs.persist`. Workers Free includes 200,000 log events/day and 3-day retention. Custom logs contain the recipient, size, message id, and R2 error stacks; bmail never logs the message body or API key.
 - **Local Email Routing test.** `POST /cdn-cgi/handler/email?from=...&to=...`.
 - **Compatibility date.** `2026-03-12`, the maximum supported by the installed workerd. No newer runtime feature is used.
 - 2026-11-16: design system overridden from Material 3 to **Neo Brutalism** for any future UI. v1 has no UI.

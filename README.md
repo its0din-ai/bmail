@@ -30,6 +30,7 @@ No database, no UI, no aliases. One Worker, one R2 bucket, one shared key.
 | **Cloudflare R2** | Stores `mail/<address>/<id>.eml` and the `latest/<address>` marker. Serves list, head, get, and delete operations. Holds the lifecycle rule. | 10 GB-month, 1M Class A and 10M Class B operations/month, free egress. |
 | **Cloudflare DNS** | Hosts the zone, MX records, and the domain used by Email Routing. | Included with the zone. |
 | **Wrangler** | Local dev, deploy, secret upload, and `r2 bucket lifecycle set`. | CLI. |
+| **Workers Logs** | Persisted invocation and custom logs, visible in the dashboard. | Free: 200,000 log events/day, 3-day retention. |
 | **Email Service activity log** | Optional observability: routing status, from, to, subject, message id, SPF/DKIM/DMARC. | Metadata only, about 31 days. It is not a mailbox and does not contain the message body. |
 
 **Not used, on purpose:** D1, KV, Durable Objects, Queues, Pages, Access, and Email Sending. The only state lives in R2.
@@ -417,6 +418,28 @@ Every tool accepts an `address` argument; it defaults to `bmail_address`. Messag
 A cursor poll does not call `ListObjects` unless the latest marker says something newer exists. That keeps polling cheap.
 
 The default poll interval is 5 seconds, with a 2-second minimum. At 5 seconds, one hour of waiting is 720 requests, or about 21,600 requests per month if you wait one hour per day. Workers Free includes 100,000 requests/day. R2 Free includes 1M Class A operations, 10M Class B operations, and 10 GB-month of storage.
+
+## Observability
+
+`worker/wrangler.jsonc` enables Workers Logs at 100% sampling:
+
+```jsonc
+"observability": {
+  "enabled": true,
+  "head_sampling_rate": 1,
+  "logs": {
+    "enabled": true,
+    "invocation_logs": true,
+    "persist": true
+  }
+}
+```
+
+- View persisted logs in **Workers & Pages** > `bmail` > **Observability**.
+- Workers Free includes 200,000 log events per day with 3-day retention.
+- The Worker emits custom logs for `bmail: received`, `bmail: stored`, config problems, and R2 write failures. It does not log message bodies or the API key.
+- `wrangler tail bmail` still works for real-time logs and does not depend on the persistence setting.
+- The in-browser editor path does not read `wrangler.jsonc`. If you use that path, enable **Observability** in the Worker settings.
 
 ## Project layout
 
