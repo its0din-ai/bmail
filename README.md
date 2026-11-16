@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/banner.svg" alt="bmail - inbound email for agents on Cloudflare Workers and R2" width="100%">
+  <img src="assets/banner.svg" alt="bmail - inbound email and ARTEX tools on Cloudflare Workers and R2" width="100%">
 </p>
 
 <p align="center">
@@ -7,6 +7,7 @@
   <img alt="Cloudflare R2" src="https://img.shields.io/badge/Cloudflare-R2-F38020?style=for-the-badge&amp;logo=cloudflare&amp;logoColor=white">
   <img alt="Cloudflare Email Routing" src="https://img.shields.io/badge/Email-Routing-F38020?style=for-the-badge&amp;logo=cloudflare&amp;logoColor=white">
   <img alt="REST API" src="https://img.shields.io/badge/API-REST-111111?style=for-the-badge">
+  <a href="https://github.com/BaaRai/ARTEX"><img alt="ARTEX" src="https://img.shields.io/badge/ARTEX-autonomous%20pentest-6b34db?style=for-the-badge"></a>
   <img alt="Free tier" src="https://img.shields.io/badge/Free%20tier-friendly-05E17A?style=for-the-badge">
 </p>
 
@@ -17,9 +18,34 @@ A tiny inbound email inbox for autonomous agents, built on the Cloudflare Free p
 - **Cloudflare Workers** receive mail and serve the REST API.
 - **Cloudflare Email Routing** handles MX, catch-all, and literal address rules.
 - **Cloudflare R2** stores the raw message and a per-address latest marker.
-- **Your own tools** poll the REST API. bmail ships no client and no UI.
+- **ARTEX** polls the REST API through the custom tools in [`artex-custom-tools.json`](./artex-custom-tools.json). bmail ships no client and no UI.
+
+bmail is the inbound mailbox for [ARTEX](https://github.com/BaaRai/ARTEX), the self-hosted autonomous penetration testing platform. ARTEX creates the custom tools from `artex-custom-tools.json`; bmail stores the mail those tools read.
 
 No database, no aliases, no bundled integrations. One Worker, one R2 bucket, one shared key.
+
+## Table of contents
+
+- [Cloudflare products used](#cloudflare-products-used)
+- [Architecture](#architecture)
+- [Flow](#flow)
+- [Recipient allowlist](#recipient-allowlist)
+- [Requirements](#requirements)
+- [Setup](#setup)
+- [Deploy with the Cloudflare dashboard](#deploy-with-the-cloudflare-dashboard)
+- [Configuration](#configuration)
+- [Local development](#local-development)
+- [Sanity check](#sanity-check)
+- [REST API](#rest-api)
+- [ARTEX custom tools](#artex-custom-tools)
+- [Ack and lifecycle](#ack-and-lifecycle)
+- [Free plan budget](#free-plan-budget)
+- [Observability](#observability)
+- [Troubleshooting](#troubleshooting)
+- [Project layout](#project-layout)
+- [Security notes](#security-notes)
+- [Limits](#limits)
+- [License](#license)
 
 ## Cloudflare products used
 
@@ -50,7 +76,7 @@ No database, no aliases, no bundled integrations. One Worker, one R2 bucket, one
              Cloudflare R2
              mail/<address>/<id>.eml  +  latest/<address>
 
-   Your tool -- HTTPS + Bearer --> Cloudflare Worker  fetch()
+   ARTEX -- HTTPS + Bearer --> Cloudflare Worker  fetch()
                                         |
                                         +--> R2 head / list / get / delete
 ```
@@ -60,7 +86,7 @@ No database, no aliases, no bundled integrations. One Worker, one R2 bucket, one
 1. Pick an address that matches the allowlist, for example `test@mail.example.com` or `bbounty@programs.example.net`.
 2. Cloudflare Email Routing delivers it to the Worker.
 3. The Worker stores the raw MIME in R2 and updates `latest/<address>`.
-4. Your tool polls the REST API or a local email injection during development.
+4. ARTEX polls the REST API, or you inject a local email during development.
 5. It reads the raw message and parses it in your own code.
 6. After a successful read, `DELETE /v1/inbox/:address/:id` removes the R2 copy. Your forwarded archive is unaffected.
 7. The R2 lifecycle rule deletes anything that was not acknowledged after `bmail_lifecycle_days`.
@@ -360,7 +386,7 @@ Parsing is your tool's job. The Worker stores and returns bytes; it does not par
 
 ## ARTEX custom tools
 
-The repository includes [`artex-custom-tools.json`](./artex-custom-tools.json), three HTTP custom tool definitions for ARTEX:
+The repository includes [`artex-custom-tools.json`](./artex-custom-tools.json), three HTTP custom tool definitions for [ARTEX](https://github.com/BaaRai/ARTEX):
 
 - `bmail_list_messages`
 - `bmail_get_message`

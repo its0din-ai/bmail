@@ -64,6 +64,7 @@ Local end-to-end check: delivered mail to two configured domains, listed metadat
 | feat | HTTP MCP | removed | Earlier HTTP MCP mode removed |
 | cleanup | MCP removal | done | Deleted `client/`, MCP/HTTP transports, deps, config, docs, and threat rows |
 | docs | ARTEX custom tools | done | Added `artex-custom-tools.json` and installation instructions |
+| docs | ARTEX banner + TOC | done | Banner includes ARTEX; README has a table of contents and repo link |
 ## Decisions & notes
 
 - **Flow.** Pick an address that matches the allowlist, for example `test@mail.example.com` or `bbounty@programs.example.net`. There is no registration and no alias table. The agent polls that address with the shared key.
