@@ -32,11 +32,11 @@ const keys = ["bmail_mail_domains", "bmail_api_key"];
 const lines = keys
   .filter((key) => env[key] !== undefined)
   .map((key) => `${key}=${env[key]}`);
-writeFileSync("worker/.dev.vars", `${lines.join("\n")}\n`);
+writeFileSync(".dev.vars", `${lines.join("\n")}\n`);
 
 const child = spawn(
   "wrangler",
   ["dev", "--ip", "127.0.0.1", "--port", "8787"],
-  { cwd: "worker", stdio: "inherit" },
+  { stdio: "inherit" },
 );
 child.on("exit", (code) => process.exit(code ?? 0));

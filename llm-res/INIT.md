@@ -19,14 +19,14 @@ Project initiation record (per `AGENTIC.md` section 0). Fill this **once, before
 
 - Primary language + version: TypeScript (Cloudflare Workers runtime; Node.js 22+ for tooling)
 - Framework: Cloudflare Workers + Wrangler; native `fetch` router, no HTTP framework
-- Package manager: pnpm (workspace: `worker/`)
+- Package manager: pnpm (single package at the repository root)
 - Runtime: Cloudflare Workers (V8 isolates) on the Workers Free plan
 - Database / storage: R2 only. One object per message under `mail/<address>/<timestamp>-<random>.eml`, plus one latest marker per address under `latest/<address>`
 - Auth mechanism: one shared bearer key, `bmail_api_key`, compared in constant time
 - Key third-party dependencies: Worker runtime: none. Tooling: TypeScript, Wrangler, Vitest.
 - Why this stack: Email Routing invokes a Worker directly, R2 stores raw MIME without a database, and your tool parses mail on its own host so the Worker stays tiny.
-- Configuration: `.env` is the source of truth. `pnpm dev` writes `worker/.dev.vars`; `pnpm deploy:worker` maps values to Worker vars and the secret.
-- Observability: Workers Logs enabled in `worker/wrangler.jsonc` with 100% sampling, invocation logs, and persistence. Workers Free includes 200,000 log events/day and 3-day retention. No message body or API key is logged by bmail.
+- Configuration: `.env` is the source of truth. `pnpm dev` writes `.dev.vars`; `pnpm deploy:worker` maps values to Worker vars and the secret.
+- Observability: Workers Logs enabled in `wrangler.jsonc` with 100% sampling, invocation logs, and persistence. Workers Free includes 200,000 log events/day and 3-day retention. No message body or API key is logged by bmail.
 
 ## Design system
 
@@ -44,8 +44,8 @@ Project initiation record (per `AGENTIC.md` section 0). Fill this **once, before
 ## Layout
 
 - Project root (absolute path): /home/enji/dev/ts/bmail
-- App/source directory: pnpm workspace with `worker/`
-- Tests directory: `worker/test/`
+- App/source directory: `src/`
+- Tests directory: `test/`
 - Config/secrets: `.env` (gitignored) and `.env.example` (committed placeholders)
 
 ## Commands (canonical verify commands)
@@ -63,7 +63,7 @@ Project initiation record (per `AGENTIC.md` section 0). Fill this **once, before
 
 - Environments (dev/staging/prod): local dev + production Worker per self-hosted deployment
 - Mail domains: **not in code**. `bmail_mail_domains` is a comma-separated allowlist. A domain entry accepts any local part; a full-address entry is exact.
-- Deploy target / mechanism: Cloudflare Workers via Wrangler or the Deploy to Cloudflare button targeting the `worker/` subdirectory, Free plan, deployed by tag
+- Deploy target / mechanism: Cloudflare Workers via Wrangler or the Deploy to Cloudflare button targeting the repository root, Free plan, deployed by tag
 - Retention: `ack_message` deletes the copy immediately after a successful read. `bmail_lifecycle_days` (default 7) sets an R2 lifecycle rule for `mail/` and `latest/` as a safety net.
 
 ## Security

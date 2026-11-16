@@ -38,7 +38,8 @@ venv/
 # cloudflare / wrangler
 .wrangler/
 .dev.vars
-worker/wrangler.deploy.jsonc
+wrangler.deploy.jsonc
+lifecycle.json
 
 # editor swap files
 *.swp

@@ -4,12 +4,12 @@
 
 <p align="center">
   <img alt="Cloudflare Workers" src="https://img.shields.io/badge/Cloudflare-Workers-F38020?style=for-the-badge&amp;logo=cloudflare&amp;logoColor=white">
-  <a href="https://deploy.workers.cloudflare.com/?url=https://github.com/its0din-ai/bmail/tree/main/worker"><img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare"></a>
   <img alt="Cloudflare R2" src="https://img.shields.io/badge/Cloudflare-R2-F38020?style=for-the-badge&amp;logo=cloudflare&amp;logoColor=white">
   <img alt="Cloudflare Email Routing" src="https://img.shields.io/badge/Email-Routing-F38020?style=for-the-badge&amp;logo=cloudflare&amp;logoColor=white">
   <img alt="REST API" src="https://img.shields.io/badge/API-REST-111111?style=for-the-badge">
   <a href="https://github.com/BaaRai/ARTEX"><img alt="ARTEX" src="https://img.shields.io/badge/ARTEX-autonomous%20pentest-6b34db?style=for-the-badge"></a>
   <img alt="Free tier" src="https://img.shields.io/badge/Free%20tier-friendly-05E17A?style=for-the-badge">
+  <br/><a href="https://deploy.workers.cloudflare.com/?url=https://github.com/its0din-ai/bmail"><img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare"></a>
 </p>
 
 # bmail
@@ -148,11 +148,11 @@ pnpm deploy:worker
 
 ### One-click deploy
 
-The **Deploy to Cloudflare** button next to the Workers badge targets the `worker/` subdirectory of the public `its0din-ai/bmail` repository. It provisions the R2 binding from `worker/wrangler.jsonc` and prompts for `bmail_mail_domains` and `bmail_api_key`.
+The **Deploy to Cloudflare** button next to the Workers badge targets the public `its0din-ai/bmail` repository. It provisions the R2 binding from `wrangler.jsonc` and prompts for `bmail_mail_domains` and `bmail_api_key`.
 
 The repository must be public and pushed for the button to work. After it finishes, configure Email Routing and add the R2 lifecycle rules manually, because the one-click flow does not run `pnpm deploy:worker`.
 
-If the button fails or you use a fork, point the `url` parameter at your public repository's `worker/` directory.
+If the button fails or you use a fork, point the `url` parameter at your public repository root.
 
 Then in the Cloudflare dashboard:
 
@@ -163,7 +163,7 @@ Then in the Cloudflare dashboard:
 
 ## Deploy with the Cloudflare dashboard
 
-Use this path if you want to create and configure the Worker in the Cloudflare web UI. The in-browser editor path uses the bundled `worker/dist/index.js`, which you build locally with `pnpm build`. The Git-based flow builds from source in Cloudflare.
+Use this path if you want to create and configure the Worker in the Cloudflare web UI. The in-browser editor path uses the bundled `dist/index.js`, which you build locally with `pnpm build`. The Git-based flow builds from source in Cloudflare.
 
 The in-browser editor does not read `wrangler.jsonc` and does not run `scripts/deploy.mjs`, so bindings, variables, and the R2 lifecycle rules are set by hand. The Git flow uses `wrangler.jsonc` for the Worker name, entry point, and R2 binding; variables and lifecycle rules are still manual.
 
@@ -189,13 +189,11 @@ If your account only shows the Git-based **Create application** flow, use that i
 
 1. Push this repository to GitHub or GitLab.
 2. Connect it in **Workers & Pages** > **Create application**.
-3. **Root directory:** `worker`. Do not use the repository root. bmail is a pnpm workspace, and Cloudflare needs a specific project.
-4. Build command: leave it empty if the UI allows it, or use `npx wrangler deploy --dry-run`.
+3. Root directory: the repository root.
+4. Build command: `pnpm install`.
 5. Deploy command: `npx wrangler deploy`.
-6. Create the R2 bucket with the name in `worker/wrangler.jsonc` (`bmail-mail`), or edit that file before pushing.
+6. Create the R2 bucket with the name in `wrangler.jsonc` (`bmail-mail`), or edit that file before pushing.
 7. Add `bmail_mail_domains` and `bmail_api_key` in the dashboard as described in step 4 below.
-
-If Cloudflare reports **"The Cloudflare application detection logic has been run in the root of a workspace instead of targeting a specific project"**, the project root is still the repository root. Open the project's build settings, set **Root directory** to `worker`, and redeploy.
 
 ### 3. Paste the Worker code
 
@@ -208,12 +206,12 @@ pnpm install
 pnpm build
 ```
 
-1. Open `worker/dist/index.js`.
+1. Open `dist/index.js`.
 2. Replace the editor contents with that file.
 3. Remove the final `//# sourceMappingURL=index.js.map` line if it is present.
 4. Select **Deploy**.
 
-If your editor accepts TypeScript, `worker/src/index.ts` also works.
+If your editor accepts TypeScript, `src/index.ts` also works.
 
 ### 4. Add the binding and variables
 
@@ -222,7 +220,7 @@ In the Worker settings:
 - **Bindings** > **Add binding** > **R2 bucket**:
   - Variable name: `MAIL`
   - Bucket: the bucket you created
-  - Skip this if you used the Git flow; `worker/wrangler.jsonc` already declares the binding.
+  - Skip this if you used the Git flow; `wrangler.jsonc` already declares the binding.
 - **Variables and Secrets**:
   - `bmail_mail_domains` as text: a comma-separated allowlist. A domain accepts any local part; a full address is exact. For example `mail.example.com,bbounty@programs.example.net`
   - `bmail_api_key` as a secret: at least 16 random characters
@@ -270,7 +268,7 @@ The following values are only used by the CLI deploy script, so you can leave th
 
 ## Configuration
 
-`.env` is the source of truth. `pnpm dev` writes `worker/.dev.vars`; `pnpm deploy:worker` maps the values to Worker vars and secrets.
+`.env` is the source of truth. `pnpm dev` writes `.dev.vars`; `pnpm deploy:worker` maps the values to Worker vars and secrets.
 
 | Key | Used by | Purpose |
 |---|---|---|
@@ -290,7 +288,7 @@ The following values are only used by the CLI deploy script, so you can leave th
 pnpm dev
 ```
 
-`pnpm dev` writes `worker/.dev.vars` from `.env` and listens on `127.0.0.1:8787`.
+`pnpm dev` writes `.dev.vars` from `.env` and listens on `127.0.0.1:8787`.
 
 Send a local message:
 
@@ -446,7 +444,7 @@ R2 Free includes 1M Class A operations, 10M Class B operations, and 10 GB-month 
 
 ## Observability
 
-`worker/wrangler.jsonc` enables Workers Logs at 100% sampling:
+`wrangler.jsonc` enables Workers Logs at 100% sampling:
 
 ```jsonc
 "observability": {
@@ -506,7 +504,7 @@ The Email Routing activity log only reports a generic upstream error. The Worker
    - `bmail: stored <address> id=<id>` - the R2 writes succeeded.
    - `bmail: MAIL is not an R2 binding` - delete any plain variable named `MAIL` and add an R2 bucket binding named `MAIL`.
    - `bmail: R2 message write failed` - the binding exists but the write failed; check the bucket still exists, the binding points to the right bucket, and R2 usage is within quota.
-   - `Provided readable stream must have a known length` - the deployed Worker is older than the `FixedLengthStream` fix. Production R2 rejects unknown-length streams, while local R2 is more permissive. Redeploy the current `worker/src/index.ts`.
+   - `Provided readable stream must have a known length` - the deployed Worker is older than the `FixedLengthStream` fix. Production R2 rejects unknown-length streams, while local R2 is more permissive. Redeploy the current `src/index.ts`.
 
 If there is no `bmail: received` line, the running Worker does not have the email handler or your recipient allowlist rejected the message before storage.
 
@@ -552,10 +550,12 @@ Check `Authorization: Bearer <bmail_api_key>`. The key must match the Worker sec
 ## Project layout
 
 ```text
-worker/                 Cloudflare Worker: email() ingest and REST API
+src/                    Worker source: email() ingest and REST API
+test/                   Worker tests
 scripts/                dev, deploy, and smoke helpers
 assets/                 README banner
-artex-custom-tools.json  ARTEX HTTP custom tool definitions
+artex-custom-tools.json ARTEX HTTP custom tool definitions
+wrangler.jsonc          Worker configuration
 llm-res/                agent rules, phase state, memory, threat model
 ```
 

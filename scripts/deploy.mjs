@@ -44,13 +44,13 @@ if (!Number.isInteger(lifecycleDays) || lifecycleDays < 1 || lifecycleDays > 365
   throw new Error("bmail_lifecycle_days must be an integer from 1 to 3650");
 }
 
-const config = JSON.parse(readFileSync("worker/wrangler.jsonc", "utf8"));
+const config = JSON.parse(readFileSync("wrangler.jsonc", "utf8"));
 if (env.cloudflare_worker_name) config.name = env.cloudflare_worker_name;
 if (config.r2_buckets?.[0]) {
   config.r2_buckets[0].bucket_name = env.cloudflare_r2_bucket_name;
 }
 
-const generated = "worker/wrangler.deploy.jsonc";
+const generated = "wrangler.deploy.jsonc";
 writeFileSync(generated, `${JSON.stringify(config, null, 2)}\n`);
 
 const args = ["deploy", "--config", "wrangler.deploy.jsonc"];
@@ -61,7 +61,6 @@ if (env.cloudflare_account_id) {
 args.push("--var", `bmail_mail_domains:${env.bmail_mail_domains}`);
 
 const deployed = spawnSync("wrangler", args, {
-  cwd: "worker",
   stdio: "inherit",
 });
 
@@ -75,7 +74,6 @@ if (!dryRun) {
     "wrangler",
     ["secret", "put", "bmail_api_key", "--config", "wrangler.deploy.jsonc"],
     {
-      cwd: "worker",
       input: `${env.bmail_api_key}\n`,
       stdio: ["pipe", "inherit", "inherit"],
     },
@@ -87,7 +85,7 @@ if (!dryRun) {
 }
 
 if (!dryRun) {
-  const lifecycleFile = "worker/lifecycle.json";
+  const lifecycleFile = "lifecycle.json";
   const maxAge = lifecycleDays * 24 * 60 * 60;
   writeFileSync(
     lifecycleFile,
@@ -128,7 +126,7 @@ if (!dryRun) {
       "lifecycle.json",
       "--force",
     ],
-    { cwd: "worker", stdio: "inherit" },
+    { stdio: "inherit" },
   );
   rmSync(lifecycleFile, { force: true });
   if (lifecycle.status !== 0) {
