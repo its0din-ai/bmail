@@ -44,8 +44,10 @@ Local end-to-end check: delivered mail to two configured domains, listed metadat
 | pre_phase_01 | design + rules setup | done | Initial architecture and rules |
 | phase_01 | simplification | done | Dropped D1, aliases, retention, tokens, mirror, UI, and cron |
 | phase_02 | worker inbox | done | R2 ingest, shared key, list and raw routes |
-| phase_03 | MCP client | done | `list_messages`, `get_message`, `wait_for_message` |
-| phase_04 | verification | done | Lint, 11 tests, build, local end-to-end |
+| phase_03 | MCP client | done | `list_messages`, `get_message`, `ack_message`, `wait_for_message` |
+| phase_04 | verification | done | Lint, 14 tests, build, local end-to-end |
+| phase_05 | ack + lifecycle | done | Idempotent delete and R2 lifecycle rules for `mail/` and `latest/` |
+| docs | README + banner | done | Cloudflare product map, architecture, config, API, MCP, free-tier budget |
 
 ## Decisions & notes
 
