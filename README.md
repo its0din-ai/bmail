@@ -317,7 +317,7 @@ A deployed Worker cannot inject mail into Email Routing, so the real email is re
 
 ### Manual checklist
 
-1. `GET /health` returns `{ "ok": true, "ready": true }` and all three checks are true.
+1. `GET /health` returns `{ "ok": true, "ready": true }` and all three checks pass.
 2. Send a message with a unique subject.
 3. `GET /v1/inbox/<address>` returns metadata; copy the `id`.
 4. `GET /v1/inbox/<address>/<id>` returns the raw MIME with your marker.
@@ -450,18 +450,18 @@ llm-res/    agent rules, phase state, memory, threat model
   "ready": false,
   "version": "0.1.0",
   "checks": {
-    "bmail_mail_domains": true,
-    "bmail_api_key": true,
+    "bmail_mail_domains": { "present": true, "valid": true },
+    "bmail_api_key": { "present": false, "valid": false },
     "r2_binding": false
   }
 }
 ```
 
+- `present: false` - the variable or secret is not on the running Worker version. Check the environment (Production vs Preview), make sure it is a runtime variable and not a build variable, and deploy a new version.
+- `present: true` and `valid: false` - the value exists but is unusable. For `bmail_mail_domains`, check quotes, wildcards, or an empty entry. For `bmail_api_key`, the value must be at least 16 characters.
 - `r2_binding: false` - add an **R2 bucket binding** with variable name `MAIL`. An environment variable named `cloudflare_r2_bucket_name` is not a binding and the Worker does not read it.
-- `bmail_mail_domains: false` - the variable is missing, empty, or has an invalid entry.
-- `bmail_api_key: false` - the secret is missing or shorter than 16 characters.
 
-Make the change, deploy a new version, and call `/health` again.
+Make the change, deploy a new version, and call `/health` again. The Worker also logs a `bmail: not ready {...}` line with the same presence and validity flags, visible in `wrangler tail`.
 
 ### `config_invalid`
 

@@ -259,22 +259,41 @@ async function handleAck(
 async function handleFetch(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   if (request.method === "GET" && url.pathname === "/health") {
-    let mailDomainsOk = false;
+    const mailDomainsPresent = Boolean((env.bmail_mail_domains ?? "").trim());
+    let mailDomainsValid = false;
     try {
       parseRecipients(env.bmail_mail_domains);
-      mailDomainsOk = true;
+      mailDomainsValid = true;
     } catch {
-      mailDomainsOk = false;
+      mailDomainsValid = false;
     }
-    const apiKeyOk = Boolean(apiKeyFromEnv(env));
+    const apiKeyPresent = Boolean((env.bmail_api_key ?? "").trim());
+    const apiKeyValid = Boolean(apiKeyFromEnv(env));
     const r2Ok = Boolean(env.MAIL);
+    const ready = mailDomainsValid && apiKeyValid && r2Ok;
+
+    if (!ready) {
+      console.log(
+        `bmail: not ready ${JSON.stringify({
+          bmail_mail_domains_present: mailDomainsPresent,
+          bmail_mail_domains_valid: mailDomainsValid,
+          bmail_api_key_present: apiKeyPresent,
+          bmail_api_key_valid: apiKeyValid,
+          r2_binding: r2Ok,
+        })}`,
+      );
+    }
+
     return json({
       ok: true,
-      ready: mailDomainsOk && apiKeyOk && r2Ok,
+      ready,
       version: "0.1.0",
       checks: {
-        bmail_mail_domains: mailDomainsOk,
-        bmail_api_key: apiKeyOk,
+        bmail_mail_domains: {
+          present: mailDomainsPresent,
+          valid: mailDomainsValid,
+        },
+        bmail_api_key: { present: apiKeyPresent, valid: apiKeyValid },
         r2_binding: r2Ok,
       },
     });

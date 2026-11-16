@@ -16,6 +16,7 @@ Format:
 
 ## Log
 
+- 2026-11-16T10:41:59Z | fix / health_presence | done | Split `/health` checks into `present` and `valid` for mail domains and API key, logged a not-ready summary, and documented build-vs-runtime and production-vs-preview causes. | worker/src/index.ts, README.md, llm-res/PHASE.md | 20 tests, smoke 10/10, bundle 11.66 KiB
 - 2026-11-16T10:38:53Z | fix / health_readiness | done | Added `/health` readiness checks for `bmail_mail_domains`, `bmail_api_key`, and the `MAIL` R2 binding; the smoke test now checks `ready` and prints failing checks. | worker/src/index.ts, scripts/smoke.mjs, README.md, llm-res/PHASE.md | 20 tests, smoke 10/10
 - 2026-11-16T10:31:32Z | fix / allowlist_wildcards | done | Rejected `*`, `*@domain`, and other wildcard entries with a clear log message, documented that a bare domain allows every local part, and added tests. | worker/src/index.ts, worker/test/index.test.ts, README.md, llm-res/PHASE.md | 20 tests pass
 - 2026-11-16T10:29:17Z | fix / config_error | done | Made the `config_invalid` response name `bmail_mail_domains` and added README troubleshooting for dashboard/Git deploys that do not read `.env`, plus the `unauthorized` case. | worker/src/index.ts, README.md, llm-res/PHASE.md | 19 tests pass
