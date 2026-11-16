@@ -501,6 +501,7 @@ The Email Routing activity log only reports a generic upstream error. The Worker
    - `bmail: stored <address> id=<id>` - the R2 writes succeeded.
    - `bmail: MAIL is not an R2 binding` - delete any plain variable named `MAIL` and add an R2 bucket binding named `MAIL`.
    - `bmail: R2 message write failed` - the binding exists but the write failed; check the bucket still exists, the binding points to the right bucket, and R2 usage is within quota.
+   - `Provided readable stream must have a known length` - the deployed Worker is older than the `FixedLengthStream` fix. Production R2 rejects unknown-length streams, while local R2 is more permissive. Redeploy the current `worker/src/index.ts`.
 
 If there is no `bmail: received` line, the running Worker does not have the email handler or your recipient allowlist rejected the message before storage.
 

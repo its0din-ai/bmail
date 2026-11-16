@@ -16,6 +16,7 @@ Format:
 
 ## Log
 
+- 2026-11-16T11:05:09Z | fix / r2_stream_length | done | Production R2 rejected `message.raw` as an unknown-length stream. Ingest now wraps it in `FixedLengthStream(message.rawSize)` and awaits the pipe plus the put. Local smoke passes; documented the production-only failure. | worker/src/index.ts, README.md, llm-res/PHASE.md | 20 tests, smoke 10/10, bundle 12.54 KiB
 - 2026-11-16T11:00:51Z | ops / observability | done | Enabled Workers Logs in `worker/wrangler.jsonc` with top-level `enabled`, 100% sampling, invocation logs, and persistence. Documented Free 200k events/day, 3-day retention, and no body/key logging. | worker/wrangler.jsonc, README.md, llm-res/INIT.md, llm-res/PHASE.md, llm-res/THREAT.md | dry-run passes
 - 2026-11-16T10:53:58Z | fix / r2_binding_check | done | `/health` and the email handler now verify `MAIL` is an actual R2 binding (`put` function), not a plain variable; documented the failure log line. | worker/src/index.ts, README.md, llm-res/PHASE.md | 20 tests pass
 - 2026-11-16T10:53:25Z | fix / email_ingest_logging | done | Added received/stored and R2 write failure logs, guarded empty from/to and a missing `MAIL` binding, and documented how to diagnose upstream delivery failures. | worker/src/index.ts, README.md, llm-res/PHASE.md | 20 tests, bundle 12.33 KiB

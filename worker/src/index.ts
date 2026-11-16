@@ -391,15 +391,22 @@ async function handleEmail(
   const from = asciiPreview((message.from ?? "").trim().toLowerCase(), 320);
 
   try {
-    await env.MAIL.put(key, message.raw, {
-      customMetadata: {
-        from,
-        subject: asciiPreview(message.headers.get("subject") ?? "", 200),
-        received_at: receivedAt,
-        size: String(message.rawSize),
-        dmarc: readDmarc(message.headers),
-      },
-    });
+    // Production R2 rejects unknown-length streams. FixedLengthStream gives R2
+    // the byte length from rawSize while keeping the message streaming.
+    const { readable, writable } = new FixedLengthStream(message.rawSize);
+    const pipe = message.raw.pipeTo(writable);
+    await Promise.all([
+      env.MAIL.put(key, readable, {
+        customMetadata: {
+          from,
+          subject: asciiPreview(message.headers.get("subject") ?? "", 200),
+          received_at: receivedAt,
+          size: String(message.rawSize),
+          dmarc: readDmarc(message.headers),
+        },
+      }),
+      pipe,
+    ]);
   } catch (error) {
     console.error(
       `bmail: R2 message write failed for ${address} ${id}: ${
