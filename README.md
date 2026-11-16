@@ -366,11 +366,71 @@ The address must be URL encoded. `after` is the `next_cursor` from the previous 
 
 ## MCP server
 
-Build the client, then point the MCP client at `client/dist/mcp.js`:
+The MCP server runs on the agent host, not on Cloudflare. It is a stdio process that calls the deployed Worker over HTTPS. There is no port to open and nothing to deploy to Cloudflare.
+
+### Build it
 
 ```bash
-pnpm build
+pnpm install
+pnpm --filter bmail-mcp build
 ```
+
+The entry point is `client/dist/mcp.js`.
+
+### Environment
+
+| Variable | Purpose |
+|---|---|
+| `bmail_api_url` | Worker URL, for example `https://bmail.example.workers.dev`. |
+| `bmail_api_key` | The same shared key used by the Worker. |
+| `bmail_address` | Optional default address for tools. |
+
+### OpenCode V2
+
+Add this to `~/.config/opencode/opencode.jsonc` for every project, or to a project `opencode.jsonc` / `.opencode/opencode.jsonc`:
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      "bmail": {
+        "type": "local",
+        "command": ["node", "/absolute/path/to/bmail/client/dist/mcp.js"],
+        "environment": {
+          "bmail_api_url": "https://bmail.example.workers.dev",
+          "bmail_api_key": "{env:BMAIL_API_KEY}",
+          "bmail_address": "test@mail.example.com"
+        }
+      }
+    }
+  }
+}
+```
+
+Make `BMAIL_API_KEY` available in the environment that starts OpenCode:
+
+```bash
+export BMAIL_API_KEY='<shared key>'
+```
+
+If OpenCode is already running, restart the background service once so it inherits the new variable:
+
+```bash
+opencode service restart
+```
+
+Verify the connection:
+
+```bash
+opencode mcp list
+```
+
+Under the default Code Mode, tools are grouped as `tools.bmail.list_messages`, `tools.bmail.get_message`, and so on. Set `"codemode": false` on the server if you want direct `bmail_*` tool names.
+
+### Other MCP clients
+
+Most clients use the `mcpServers` shape:
 
 ```json
 {
@@ -387,6 +447,37 @@ pnpm build
   }
 }
 ```
+
+### Install it on another host
+
+If the agent runs on a different machine, either clone the repository there and run the build above, or install the packaged client:
+
+```bash
+pnpm --filter bmail-mcp pack
+# copy client/bmail-mcp-0.1.0.tgz to the agent host
+npm install -g ./bmail-mcp-0.1.0.tgz
+```
+
+Then use `bmail-mcp` as the command:
+
+```json
+{
+  "command": "bmail-mcp"
+}
+```
+
+Keep `BMAIL_API_KEY` in the client environment, not in a committed config file.
+
+### Test it without an agent
+
+```bash
+bmail_api_url=https://bmail.example.workers.dev \
+bmail_api_key=<shared key> \
+bmail_address=test@mail.example.com \
+npx @modelcontextprotocol/inspector node client/dist/mcp.js
+```
+
+The Inspector opens a local UI where you can run the tools.
 
 Tools:
 

@@ -61,6 +61,7 @@ Local end-to-end check: delivered mail to two configured domains, listed metadat
 | fix | R2 binding check | done | Health and ingest verify `MAIL` is an R2 binding, not a variable |
 | ops | observability | done | Workers Logs enabled with invocation logs, persistence, 3-day Free retention |
 | fix | R2 stream length | done | Production R2 requires `FixedLengthStream(message.rawSize)` |
+| docs | MCP deploy | done | Runtime on agent host, OpenCode config, pack/install, Inspector |
 
 ## Decisions & notes
 
