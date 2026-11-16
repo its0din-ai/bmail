@@ -39,3 +39,7 @@ venv/
 .wrangler/
 .dev.vars
 worker/wrangler.deploy.jsonc
+
+# editor swap files
+*.swp
+*.swo
