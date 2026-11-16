@@ -16,6 +16,7 @@ Format:
 
 ## Log
 
+- 2026-11-16T10:04:16Z | docs / banner_style | done | Replaced the neobrutalist banner with a light minimal layout: hairline rules, restrained type, thin data-path diagram, and a single Cloudflare orange accent. | assets/banner.svg | SVG XML valid
 - 2026-11-16T10:01:52Z | docs / readme_banner | done | Rewrote the root README with a Cloudflare product map, architecture, config, API, MCP, ack/lifecycle, and free-tier budget. Added `assets/banner.svg`. | README.md, assets/banner.svg, llm-res/PHASE.md | SVG XML valid, no deployment literals
 - 2026-11-16T09:58:25Z | phase_06 / ack_lifecycle | done | Added idempotent `DELETE /v1/inbox/:address/:id` and MCP `ack_message` to delete after a successful read; deploy now sets R2 lifecycle rules for `mail/` and `latest/` after `bmail_lifecycle_days` (default 7). Verified ack 204, raw 404, MCP ack, and deploy dry run. | worker/src/index.ts, client/src/api.ts, client/src/mcp.ts, scripts/deploy.mjs, .env.example, README.md, llm-res/*.md | lint clean, 14 tests, bundle 9.86 KiB
 - 2026-11-16T09:52:37Z | phase_05 / poll_floor | done | Set the MCP wait interval minimum to 2 seconds to cap continuous request and R2 head volume; default stays 5 seconds. | client/src/mcp.ts, README.md, llm-res/PHASE.md, llm-res/THREAT.md | 14 tests pass
