@@ -556,7 +556,6 @@ scripts/                dev, deploy, and smoke helpers
 assets/                 README banner
 artex-custom-tools.json ARTEX HTTP custom tool definitions
 wrangler.jsonc          Worker configuration
-llm-res/                agent rules, phase state, memory, threat model
 ```
 
 ## Security notes

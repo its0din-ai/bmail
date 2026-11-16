@@ -44,3 +44,6 @@ lifecycle.json
 # editor swap files
 *.swp
 *.swo
+
+# agent rules and local project state
+llm-res/
