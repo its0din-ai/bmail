@@ -249,6 +249,10 @@ Use `https://<worker-url>` as `bmail_api_url` in the MCP config. The following v
 | `bmail_api_url` | MCP and smoke test | Worker base URL. |
 | `bmail_address` | MCP and smoke test | Optional default address for tools and the smoke test. |
 | `bmail_local_email_url` | Smoke test | Optional local email injection base. Defaults to `bmail_api_url` when it is localhost. |
+| `bmail_http_host` | HTTP MCP | Bind address, default `127.0.0.1`. |
+| `bmail_http_port` | HTTP MCP | Listen port, default `8788`. |
+| `bmail_http_path` | HTTP MCP | Endpoint path, default `/mcp`. |
+| `bmail_cors_origin` | HTTP MCP | Optional browser origin allowed by CORS. |
 
 ## Local development
 
@@ -478,6 +482,62 @@ npx @modelcontextprotocol/inspector node client/dist/mcp.js
 ```
 
 The Inspector opens a local UI where you can run the tools.
+
+### HTTP mode for ARTEX and other remote clients
+
+The same tools can be served over MCP **Streamable HTTP**. This runs a Node process on the agent host, not on Cloudflare.
+
+```bash
+pnpm --filter bmail-mcp build
+
+bmail_api_url=https://bmail.example.workers.dev \
+bmail_api_key=<shared key> \
+bmail_address=test@mail.example.com \
+bmail_http_host=127.0.0.1 \
+bmail_http_port=8788 \
+node client/dist/http.js
+```
+
+Endpoint:
+
+```text
+http://127.0.0.1:8788/mcp
+```
+
+Authentication is the same shared key:
+
+```text
+Authorization: Bearer <bmail_api_key>
+```
+
+Point ARTEX at that URL and configure the header. If ARTEX only supports OAuth discovery and cannot send custom headers, this bearer endpoint is not enough; an OAuth layer would be needed.
+
+To expose it publicly, keep the process bound to `127.0.0.1` and put a TLS proxy or tunnel in front:
+
+```bash
+cloudflared tunnel --url http://127.0.0.1:8788
+```
+
+Use the resulting HTTPS URL plus `/mcp`. The Node process does not terminate TLS; the tunnel or reverse proxy does.
+
+If ARTEX is a browser application, set the CORS origin:
+
+```bash
+bmail_cors_origin=https://artex.example
+```
+
+HTTP MCP settings:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `bmail_http_host` | `127.0.0.1` | Bind address. Keep this on loopback behind a proxy. |
+| `bmail_http_port` | `8788` | Listen port. |
+| `bmail_http_path` | `/mcp` | MCP endpoint path. |
+| `bmail_cors_origin` | empty | Allowed browser origin. |
+
+The HTTP server uses MCP Streamable HTTP with in-memory sessions and JSON responses, not long-lived SSE. The MCP client handles the `mcp-session-id` header automatically. Sessions are lost when the process restarts; clients reconnect. Anyone with `bmail_api_key` can read every allowed address, so do not expose the port directly to the internet.
+
+If you installed the client globally, `bmail-mcp-http` runs the same HTTP server. Locally, `pnpm mcp:http` is equivalent to `node client/dist/http.js`.
 
 Tools:
 

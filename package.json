@@ -14,7 +14,8 @@
     "dev": "node scripts/dev.mjs",
     "deploy:worker": "node scripts/deploy.mjs",
     "smoke": "node scripts/smoke.mjs",
-    "mcp": "node client/dist/mcp.js"
+    "mcp": "node client/dist/mcp.js",
+    "mcp:http": "node client/dist/http.js"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

@@ -33,6 +33,7 @@ Commands that prove the current state builds, lints, and tests clean:
 - Run: `pnpm dev` (127.0.0.1:8787)
 - Smoke: `pnpm smoke` (needs `bmail_api_url`, `bmail_api_key`, `bmail_address`)
 - MCP: `pnpm mcp`
+- HTTP MCP: `pnpm mcp:http` (default `127.0.0.1:8788/mcp`)
 
 Last verified result: lint clean, 20 tests passing, Worker bundle 12.54 KiB (gzip 3.88 KiB), smoke test 10/10 passing locally.
 
@@ -62,6 +63,7 @@ Local end-to-end check: delivered mail to two configured domains, listed metadat
 | ops | observability | done | Workers Logs enabled with invocation logs, persistence, 3-day Free retention |
 | fix | R2 stream length | done | Production R2 requires `FixedLengthStream(message.rawSize)` |
 | docs | MCP deploy | done | Runtime on agent host, OpenCode config, pack/install, Inspector |
+| feat | HTTP MCP | done | Streamable HTTP mode for ARTEX, bearer auth, sessions, CORS |
 
 ## Decisions & notes
 
@@ -76,7 +78,8 @@ Local end-to-end check: delivered mail to two configured domains, listed metadat
 - **Domains.** `bmail_mail_domains` is a comma-separated allowlist. An entry is either a domain (any local part) or a full address (exact). Addresses outside it return 403. Email Routing decides what reaches the Worker; this allowlist is the second gate.
 - **Validation.** Local parts are restricted to `[a-z0-9._+-]` with no slashes, so an address cannot escape its R2 prefix. Message ids must match `<13 digits>-<12 lowercase alnum>`.
 - **DMARC trust.** Follow the docs: read only the first `Authentication-Results` header, require `mx.cloudflare.net` as its authserv-id, then store its dmarc result. A sender-supplied header that merely mentions Cloudflare is ignored. Tested in `worker/test/index.test.ts`.
-- **MCP.** The server runs on the agent host over stdio and calls the REST API. `postal-mime` parses raw mail locally. `wait_for_message` starts at the current millisecond when `after` is omitted.
+- **MCP.** The server runs on the agent host, not Cloudflare. Stdio mode is `client/dist/mcp.js`; HTTP mode is `client/dist/http.js`. Both call the REST API and parse raw mail locally with `postal-mime`. `wait_for_message` starts at the current millisecond when `after` is omitted.
+- **HTTP MCP.** Streamable HTTP with in-memory sessions, JSON responses, bearer auth using `bmail_api_key`, a loopback bind by default, and optional CORS. It is meant for clients such as ARTEX that connect to a URL; TLS is terminated by a tunnel or reverse proxy.
 - **Deletion.** `DELETE /v1/inbox/:address/:id` deletes the `.eml` object and returns 204, including when the object is already gone. The MCP `ack_message` wraps it. The latest marker may point at a deleted object; that is harmless because new mail updates it. The owner's forwarded archive is untouched.
 - **Lifecycle.** `pnpm deploy:worker` sets an R2 lifecycle configuration with two rules: `mail/` and `latest/`, each deleting objects after `bmail_lifecycle_days` (default 7 days, `maxAge` in seconds). It uses `wrangler r2 bucket lifecycle set --file`, which replaces the bucket's lifecycle rules, so the bucket should be dedicated to bmail.
 - **No D1, no cron, no Durable Objects, no Queues, no KV.** R2 only.

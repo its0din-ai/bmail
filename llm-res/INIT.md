@@ -78,8 +78,8 @@ Project initiation record (per `AGENTIC.md` section 0). Fill this **once, before
 
 ## Scope
 
-- In scope for v1: `email()` R2 ingest, one REST list route, one REST raw route, one REST delete/ack route, one stdio MCP server with `list_messages`, `get_message`, `ack_message`, `wait_for_message`, and the R2 lifecycle rule applied by the deploy script.
-- Out of scope: aliases, registration, D1, scheduled cleanup jobs (R2 lifecycle handles expiry), UI, outbound mail, Worker-hosted MCP, rate limiting, full-text search.
+- In scope for v1: `email()` R2 ingest, one REST list route, one REST raw route, one REST delete/ack route, an R2-backed stdio MCP server (`list_messages`, `get_message`, `ack_message`, `wait_for_message`), an HTTP MCP mode with the same tools, and the R2 lifecycle rule applied by the deploy script.
+- Out of scope: aliases, registration, D1, scheduled cleanup jobs (R2 lifecycle handles expiry), UI, outbound mail, Worker-hosted MCP (the HTTP mode is a Node process), rate limiting, full-text search.
 - Open questions:
   - Owner name
   - Deployment zone and R2 bucket name in the real `.env`
