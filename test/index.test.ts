@@ -46,6 +46,7 @@ describe("parseForwardTo", () => {
   it("treats an empty value, none, and off as disabled", () => {
     expect(parseForwardTo(undefined)).toBeNull();
     expect(parseForwardTo("")).toBeNull();
+    expect(parseForwardTo("   ")).toBeNull();
     expect(parseForwardTo(" NONE ")).toBeNull();
     expect(parseForwardTo("off")).toBeNull();
   });

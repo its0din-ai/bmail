@@ -1,7 +1,9 @@
-# Runtime values prompted by the Deploy to Cloudflare button.
+# Required runtime values prompted by the Deploy to Cloudflare button.
 # They become Worker secrets, so they survive every rebuild and redeploy.
 bmail_mail_domains=
 bmail_api_key=
-# Forward every caught message to this verified Email Routing destination.
-# Enter `none` to keep forwarding disabled.
-bmail_forward_to=
+
+# Optional. Forward every caught message to a verified Email Routing
+# destination. The deploy button has no optional fields, so this value is
+# configured after deploy instead. Leave it unset to disable forwarding.
+# bmail_forward_to=

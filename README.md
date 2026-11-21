@@ -138,7 +138,7 @@ bmail_forward_to=archive@example.net
 
 The Worker stores the message in R2 first, then calls `message.forward()`. A forward failure is logged as `bmail: forward failed` and does not reject or delete the R2 copy, so ingestion still succeeds.
 
-Cloudflare requires the destination to be **verified** under **Email Routing** > **Destination addresses**. It also refuses to forward to an address that routes back to the same Worker, which prevents mail loops. Use `none` or an empty value to disable forwarding. `bmail_forward_to` accepts one full email address, not a domain or a comma-separated list.
+Cloudflare requires the destination to be **verified** under **Email Routing** > **Destination addresses**. It also refuses to forward to an address that routes back to the same Worker, which prevents mail loops. The value is optional: leave it unset, empty, or set it to `none` to disable forwarding. `bmail_forward_to` accepts one full email address, not a domain or a comma-separated list.
 
 If you prefer, you can skip `bmail_forward_to` and keep the personal archive on the Email Routing catch-all instead, as shown above. Do not give the same routing rule two actions.
 
@@ -165,13 +165,14 @@ pnpm deploy:worker
 
 ### One-click deploy
 
-The **Deploy to Cloudflare** button next to the Workers badge targets the public `its0din-ai/bmail` repository. It provisions the R2 binding from `wrangler.jsonc` and prompts for all three runtime values from `.dev.vars.example`:
+The **Deploy to Cloudflare** button next to the Workers badge targets the public `its0din-ai/bmail` repository. It provisions the R2 binding from `wrangler.jsonc` and prompts for the required runtime values from `.dev.vars.example`:
 
 - `bmail_api_key` - the bearer token for the REST API.
 - `bmail_mail_domains` - the comma-separated allowlist of addresses or domains to catch.
-- `bmail_forward_to` - a verified forwarding destination, or `none` to disable forwarding.
 
 Cloudflare stores these as Worker **secrets** at deploy time. Secrets are not deleted by later deploys, so rebuilding the Worker from Git keeps the same environment. The button also sets `keep_vars: true`, which protects any plaintext variables you add in the dashboard.
+
+`bmail_forward_to` is optional and is not prompted, because the deploy form treats every listed value as required. Add it afterward in **Settings** > **Variables and Secrets** if you want forwarding. If it is absent or empty, the Worker stores mail normally and does not forward or throw an error.
 
 The repository must be public and pushed for the button to work. After it finishes, configure Email Routing and add the R2 lifecycle rules manually, because the one-click flow does not run `pnpm deploy:worker`.
 
@@ -249,7 +250,7 @@ In the Worker settings:
   - `bmail_api_key` as a secret: at least 16 random characters
   - `bmail_forward_to` as text (optional): one verified destination address, or `none`
 
-Plaintext variables survive redeploys because `wrangler.jsonc` sets `keep_vars: true`. Secrets are never deleted by a deploy. If you use the one-click button, all three values are already stored as secrets.
+Plaintext variables survive redeploys because `wrangler.jsonc` sets `keep_vars: true`. Secrets are never deleted by a deploy. If you use the one-click button, the two required values are already stored as secrets; add the optional forward destination afterward.
 
 Do not add `cloudflare_r2_bucket_name` as a Worker variable. It is only read by `pnpm deploy:worker`; the dashboard path uses the R2 binding instead.
 
@@ -296,8 +297,9 @@ The following values are only used by the CLI deploy script, so you can leave th
 
 ### Runtime variables and secrets
 
-- `bmail_mail_domains`, `bmail_api_key`, and `bmail_forward_to` are runtime values. Set them in **Settings** > **Variables and Secrets**.
-- The Deploy to Cloudflare button prompts for all three from `.dev.vars.example` and stores them as **secrets**. Secrets are not deleted by a deploy, so a rebuild keeps the same environment.
+- `bmail_mail_domains` and `bmail_api_key` are required runtime values. Set them in **Settings** > **Variables and Secrets**.
+- The Deploy to Cloudflare button prompts for those two from `.dev.vars.example` and stores them as **secrets**. Secrets are not deleted by a deploy, so a rebuild keeps the same environment.
+- `bmail_forward_to` is optional. Add it as a Worker variable or secret after deploy when you want forwarding. An empty or missing value disables forwarding without an error.
 - `wrangler.jsonc` sets `keep_vars: true`. That protects plaintext variables you add in the dashboard from a rebuild or redeploy.
 - **Build** variables and secrets are available only during the build. The Worker cannot read them with `env.*`.
 - Do not commit real values or add secrets to `vars` in `wrangler.jsonc`.

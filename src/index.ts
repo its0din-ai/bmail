@@ -395,6 +395,8 @@ async function handleEmail(
     return;
   }
 
+  // Forwarding is optional. An empty or missing value disables it without
+  // rejecting the message; only a malformed non-empty value is logged.
   let forwardTo: string | null = null;
   try {
     forwardTo = parseForwardTo(env.bmail_forward_to);
