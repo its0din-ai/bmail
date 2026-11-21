@@ -60,7 +60,7 @@ No database, no aliases, no bundled integrations. One Worker, one R2 bucket, one
 | **Wrangler** | Local dev, deploy, secret upload, and `r2 bucket lifecycle set`. | CLI. |
 | **Workers Logs** | Persisted invocation and custom logs, visible in the dashboard. | Free: 200,000 log events/day, 3-day retention. |
 
-**Not used, on purpose:** D1, KV, Durable Objects, Queues, Pages, Access, and Email Sending. The only state lives in R2.
+**Not used, on purpose:** D1, KV, Durable Objects, Queues, Pages, and Access. The only state lives in R2. Email Sending is used only for the optional subject-prefixed forward to a verified destination.
 
 ## Architecture
 
@@ -136,9 +136,11 @@ Set `bmail_forward_to` to one address when you also want a normal inbox copy:
 bmail_forward_to=archive@example.net
 ```
 
-The Worker stores the message in R2 first, then calls `message.forward()`. A forward failure is logged as `bmail: forward failed` and does not reject or delete the R2 copy, so ingestion still succeeds.
+The Worker stores the message in R2 first, then forwards it. Forwarded mail gets a `BMail :: ` subject prefix, for example `BMail :: Your code is 123456`, so you can filter it into a separate folder.
 
-Cloudflare requires the destination to be **verified** under **Email Routing** > **Destination addresses**. It also refuses to forward to an address that routes back to the same Worker, which prevents mail loops. The value is optional: leave it unset, empty, or set it to `none` to disable forwarding. `bmail_forward_to` accepts one full email address, not a domain or a comma-separated list.
+`message.forward()` cannot change the Subject header; Cloudflare only lets it add `X-` headers. When the `EMAIL` send binding is present, bmail instead re-sends the raw message through Email Sending with the prefixed Subject. That path also sets `From:` to the bmail address that caught the mail, adds `Reply-To:` with the original envelope sender, and records the original sender in `X-Bmail-Original-From`. If sending is unavailable, it falls back to `message.forward()` without the prefix. A forward failure is logged and does not reject or delete the R2 copy, so ingestion still succeeds.
+
+Cloudflare requires the destination to be **verified** under **Email Routing** > **Destination addresses**. It also refuses to forward to an address that routes back to the same Worker, which prevents mail loops. The value is optional: leave it unset, empty, or set it to `none` to disable forwarding. `bmail_forward_to` accepts one full email address, not a domain or a comma-separated list. Sending to a verified destination address is free on the Free plan.
 
 If you prefer, you can skip `bmail_forward_to` and keep the personal archive on the Email Routing catch-all instead, as shown above. Do not give the same routing rule two actions.
 
@@ -165,7 +167,7 @@ pnpm deploy:worker
 
 ### One-click deploy
 
-The **Deploy to Cloudflare** button next to the Workers badge targets the public `its0din-ai/bmail` repository. It provisions the R2 binding from `wrangler.jsonc` and prompts for the required runtime values from `.dev.vars.example`:
+The **Deploy to Cloudflare** button next to the Workers badge targets the public `its0din-ai/bmail` repository. It provisions the R2 binding and the `EMAIL` send binding from `wrangler.jsonc`, and prompts for the required runtime values from `.dev.vars.example`:
 
 - `bmail_api_key` - the bearer token for the REST API.
 - `bmail_mail_domains` - the comma-separated allowlist of addresses or domains to catch.
@@ -245,6 +247,10 @@ In the Worker settings:
   - Variable name: `MAIL`
   - Bucket: the bucket you created
   - Skip this if you used the Git flow; `wrangler.jsonc` already declares the binding.
+- **Bindings** > **Add binding** > **Email** (send email):
+  - Variable name: `EMAIL`
+  - Skip this if you used the Git flow; `wrangler.jsonc` already declares the `send_email` binding.
+  - This is optional. Without it, forwarding still works through `message.forward()`, but without the `BMail :: ` subject prefix.
 - **Variables and Secrets**:
   - `bmail_mail_domains` as text: a comma-separated allowlist. A domain accepts any local part; a full address is exact. For example `mail.example.com,bbounty@programs.example.net`
   - `bmail_api_key` as a secret: at least 16 random characters
@@ -300,6 +306,7 @@ The following values are only used by the CLI deploy script, so you can leave th
 - `bmail_mail_domains` and `bmail_api_key` are required runtime values. Set them in **Settings** > **Variables and Secrets**.
 - The Deploy to Cloudflare button prompts for those two from `.dev.vars.example` and stores them as **secrets**. Secrets are not deleted by a deploy, so a rebuild keeps the same environment.
 - `bmail_forward_to` is optional. Add it as a Worker variable or secret after deploy when you want forwarding. An empty or missing value disables forwarding without an error.
+- `EMAIL` is the optional `send_email` binding declared in `wrangler.jsonc`. It enables the `BMail :: ` subject prefix. Without it, forwarding falls back to `message.forward()`.
 - `wrangler.jsonc` sets `keep_vars: true`. That protects plaintext variables you add in the dashboard from a rebuild or redeploy.
 - **Build** variables and secrets are available only during the build. The Worker cannot read them with `env.*`.
 - Do not commit real values or add secrets to `vars` in `wrangler.jsonc`.
@@ -540,7 +547,9 @@ The Email Routing activity log only reports a generic upstream error. The Worker
 3. Look for:
    - `bmail: received <address> size=<n>` - the handler started.
    - `bmail: stored <address> id=<id>` - the R2 writes succeeded.
-   - `bmail: forwarded <address> to <destination>` - the optional forward succeeded.
+   - `bmail: forwarded <address> to <destination> id=<id> subject-prefixed` - the prefixed forward was sent through the `EMAIL` binding.
+   - `bmail: forwarded <address> to <destination>` - the plain `message.forward()` fallback succeeded.
+   - `bmail: send failed ... falling back to forward` - the `EMAIL` binding could not send; bmail retried with `message.forward()`.
    - `bmail: forward failed` - the message was stored, but forwarding failed. Verify the destination under Email Routing > Destination addresses and make sure it does not route back to this Worker. This does not reject the message.
    - `bmail: MAIL is not an R2 binding` - delete any plain variable named `MAIL` and add an R2 bucket binding named `MAIL`.
    - `bmail: R2 message write failed` - the binding exists but the write failed; check the bucket still exists, the binding points to the right bucket, and R2 usage is within quota.
@@ -614,7 +623,7 @@ wrangler.jsonc          Worker configuration
 - Inbound message size is capped by Cloudflare at 25 MiB.
 - `limit` is capped at 200 per list call.
 - There is no bundled client or UI.
-- There is no alias manager, arbitrary outbound mail, or D1. The only outbound message is the optional forward.
+- There is no alias manager, arbitrary outbound mail, or D1. The only outbound message is the optional subject-prefixed forward.
 
 ## License
 

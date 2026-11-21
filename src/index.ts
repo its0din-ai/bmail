@@ -1,11 +1,15 @@
+import { EmailMessage } from "cloudflare:email";
+
 interface Env {
   MAIL: R2Bucket;
+  EMAIL?: SendEmail;
   bmail_mail_domains?: string;
   bmail_api_key?: string;
   bmail_forward_to?: string;
 }
 
 const MAX_MESSAGE_BYTES = 25 * 1024 * 1024;
+const FORWARD_SUBJECT_PREFIX = "BMail :: ";
 const DOMAIN_RE =
   /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
 const LOCAL_RE = /^[a-z0-9](?:[a-z0-9._+-]{0,62}[a-z0-9])?$/;
@@ -141,6 +145,152 @@ function newMessageId(): string {
 
 function asciiPreview(value: string, maxLength: number): string {
   return value.replace(/[^\x20-\x7e]/g, "?").slice(0, maxLength);
+}
+
+function findHeaderSeparator(bytes: Uint8Array): {
+  index: number;
+  length: number;
+} {
+  for (let index = 0; index < bytes.length - 1; index += 1) {
+    if (
+      bytes[index] === 13 &&
+      bytes[index + 1] === 10 &&
+      bytes[index + 2] === 13 &&
+      bytes[index + 3] === 10
+    ) {
+      return { index, length: 4 };
+    }
+    if (bytes[index] === 10 && bytes[index + 1] === 10) {
+      return { index, length: 2 };
+    }
+  }
+  return { index: bytes.length, length: 0 };
+}
+
+interface MailHeader {
+  name: string;
+  value: string;
+}
+
+const DROPPED_FORWARD_HEADERS = new Set([
+  "received",
+  "return-path",
+  "dkim-signature",
+  "authentication-results",
+  "arc-seal",
+  "arc-message-signature",
+  "arc-authentication-results",
+]);
+
+function parseHeaders(headerText: string): MailHeader[] {
+  const headers: MailHeader[] = [];
+  for (const line of headerText.split(/\r?\n/)) {
+    if (/^[ \t]/.test(line) && headers.length > 0) {
+      const last = headers[headers.length - 1]!;
+      last.value = `${last.value} ${line.trim()}`.trim();
+      continue;
+    }
+    const colon = line.indexOf(":");
+    if (colon <= 0) continue;
+    const name = line.slice(0, colon).trim();
+    if (!/^[A-Za-z0-9-]+$/.test(name)) continue;
+    headers.push({
+      name,
+      value: line.slice(colon + 1).trim(),
+    });
+  }
+  return headers;
+}
+
+function prefixSubjectValue(value: string, prefix: string): string {
+  const alreadyPrefixed = value
+    .trimStart()
+    .toLowerCase()
+    .startsWith(prefix.trimEnd().toLowerCase());
+  return alreadyPrefixed ? value : `${prefix}${value}`;
+}
+
+export function prepareForwardedRaw(
+  raw: Uint8Array | ArrayBuffer,
+  options: {
+    sender: string;
+    originalFrom: string;
+    prefix?: string;
+  },
+): Uint8Array {
+  const prefix = options.prefix ?? FORWARD_SUBJECT_PREFIX;
+  const bytes = raw instanceof Uint8Array ? raw : new Uint8Array(raw);
+  const separator = findHeaderSeparator(bytes);
+  const headerBytes = bytes.subarray(0, separator.index);
+  const bodyBytes = bytes.subarray(separator.index + separator.length);
+  const headers = parseHeaders(new TextDecoder().decode(headerBytes));
+
+  const outputHeaders: MailHeader[] = [];
+  let hasReplyTo = false;
+  let hasSubject = false;
+  for (const header of headers) {
+    const name = header.name.toLowerCase();
+    if (
+      DROPPED_FORWARD_HEADERS.has(name) ||
+      name.startsWith("x-bmail-") ||
+      name === "from"
+    ) {
+      continue;
+    }
+    if (name === "subject") {
+      hasSubject = true;
+      outputHeaders.push({
+        name: "Subject",
+        value: prefixSubjectValue(header.value, prefix),
+      });
+      continue;
+    }
+    if (name === "reply-to") hasReplyTo = true;
+    outputHeaders.push(header);
+  }
+
+  const display = options.originalFrom
+    .replace(/["\\\r\n]/g, "")
+    .slice(0, 200);
+  outputHeaders.unshift({
+    name: "From",
+    value: display
+      ? `"${display} via bmail" <${options.sender}>`
+      : `bmail <${options.sender}>`,
+  });
+  if (!hasSubject) {
+    outputHeaders.push({
+      name: "Subject",
+      value: `${prefix}(no subject)`,
+    });
+  }
+  if (!hasReplyTo && options.originalFrom) {
+    outputHeaders.push({ name: "Reply-To", value: options.originalFrom });
+  }
+  outputHeaders.push({
+    name: "X-Bmail-Original-To",
+    value: options.sender,
+  });
+  if (options.originalFrom) {
+    outputHeaders.push({
+      name: "X-Bmail-Original-From",
+      value: options.originalFrom,
+    });
+  }
+
+  const newHeaderBytes = new TextEncoder().encode(
+    outputHeaders.map((header) => `${header.name}: ${header.value}`).join("\r\n"),
+  );
+  const output = new Uint8Array(
+    newHeaderBytes.length + separator.length + bodyBytes.length,
+  );
+  output.set(newHeaderBytes, 0);
+  output.set(
+    bytes.subarray(separator.index, separator.index + separator.length),
+    newHeaderBytes.length,
+  );
+  output.set(bodyBytes, newHeaderBytes.length + separator.length);
+  return output;
 }
 
 function bearerToken(request: Request): string | null {
@@ -422,12 +572,26 @@ async function handleEmail(
   const receivedAt = new Date().toISOString();
   const key = messageKey(address, id);
   const from = asciiPreview((message.from ?? "").trim().toLowerCase(), 320);
+  // message.forward() cannot change the Subject header. When a send binding is
+  // available, keep a second copy of the raw message so it can be re-sent with
+  // a filterable subject prefix. Otherwise fall back to message.forward().
+  const useEmailSend = Boolean(
+    forwardTo && typeof env.EMAIL?.send === "function",
+  );
+  let r2Raw = message.raw;
+  let forwardRaw: Promise<ArrayBuffer> | null = null;
+  if (useEmailSend) {
+    const [forR2, forForward] = message.raw.tee();
+    r2Raw = forR2;
+    forwardRaw = new Response(forForward).arrayBuffer();
+    void forwardRaw.catch(() => {});
+  }
 
   try {
     // Production R2 rejects unknown-length streams. FixedLengthStream gives R2
     // the byte length from rawSize while keeping the message streaming.
     const { readable, writable } = new FixedLengthStream(message.rawSize);
-    const pipe = message.raw.pipeTo(writable);
+    const pipe = r2Raw.pipeTo(writable);
     await Promise.all([
       env.MAIL.put(key, readable, {
         customMetadata: {
@@ -468,6 +632,28 @@ async function handleEmail(
   console.log(`bmail: stored ${address} id=${id}`);
 
   if (!forwardTo) return;
+
+  if (useEmailSend && forwardRaw) {
+    try {
+      const raw = prepareForwardedRaw(await forwardRaw, {
+        sender: address,
+        originalFrom: from,
+      });
+      const body = new Response(raw).body;
+      if (!body) throw new Error("could not prepare forwarded message");
+      await env.EMAIL!.send(new EmailMessage(address, forwardTo, body));
+      console.log(
+        `bmail: forwarded ${address} to ${forwardTo} id=${id} subject-prefixed`,
+      );
+      return;
+    } catch (error) {
+      console.error(
+        `bmail: send failed for ${address} id=${id} to ${forwardTo}, falling back to forward: ${
+          error instanceof Error ? (error.stack ?? error.message) : String(error)
+        }`,
+      );
+    }
+  }
 
   try {
     await message.forward(

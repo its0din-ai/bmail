@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   parseForwardTo,
   parseRecipients,
+  prepareForwardedRaw,
   readDmarc,
   recipientAllowed,
   splitAddress,
@@ -59,6 +60,61 @@ describe("parseForwardTo", () => {
     expect(() => parseForwardTo("a/b@mail.example.com")).toThrow(
       /forward address/,
     );
+  });
+});
+
+describe("prepareForwardedRaw", () => {
+  const options = {
+    sender: "test@mail.example.com",
+    originalFrom: "sender@example.com",
+  };
+
+  function buildRaw(header: string, body: Uint8Array): Uint8Array {
+    const headerBytes = new TextEncoder().encode(header);
+    const raw = new Uint8Array(headerBytes.length + body.length);
+    raw.set(headerBytes, 0);
+    raw.set(body, headerBytes.length);
+    return raw;
+  }
+
+  it("prefixes the subject, rewrites From, and keeps body bytes intact", () => {
+    const body = new Uint8Array([0, 255, 13, 10, 66]);
+    const raw = buildRaw(
+      "From: Sender <sender@example.com>\r\nSubject: Hello\r\nReceived: spam\r\n\r\n",
+      body,
+    );
+    const output = prepareForwardedRaw(raw, options);
+    const text = new TextDecoder().decode(output);
+    expect(text).toContain(
+      'From: "sender@example.com via bmail" <test@mail.example.com>',
+    );
+    expect(text).toContain("Subject: BMail :: Hello");
+    expect(text).toContain("Reply-To: sender@example.com");
+    expect(text).not.toContain("Received: spam");
+    expect(Array.from(output.slice(-body.length))).toEqual([...body]);
+  });
+
+  it("adds a subject header when the message has none", () => {
+    const output = prepareForwardedRaw(
+      buildRaw("To: test@mail.example.com\r\n\r\n", new Uint8Array()),
+      options,
+    );
+    expect(new TextDecoder().decode(output)).toContain(
+      "Subject: BMail :: (no subject)",
+    );
+  });
+
+  it("does not prefix the subject twice", () => {
+    const output = prepareForwardedRaw(
+      buildRaw(
+        "Subject: BMail :: Already prefixed\r\n\r\n",
+        new Uint8Array(),
+      ),
+      options,
+    );
+    const text = new TextDecoder().decode(output);
+    expect(text).toContain("Subject: BMail :: Already prefixed");
+    expect(text).not.toContain("BMail :: BMail ::");
   });
 });
 

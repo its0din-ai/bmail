@@ -18,5 +18,10 @@
       "binding": "MAIL",
       "bucket_name": "bmail-mail"
     }
+  ],
+  "send_email": [
+    {
+      "name": "EMAIL"
+    }
   ]
 }
