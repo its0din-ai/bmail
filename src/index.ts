@@ -526,6 +526,58 @@ async function handleFetch(request: Request, env: Env): Promise<Response> {
   return fail("not_found", "Not found", 404);
 }
 
+async function deletePrefix(env: Env, prefix: string): Promise<number> {
+  let cursor: string | undefined;
+  let deleted = 0;
+  do {
+    const listed = await env.MAIL.list({
+      prefix,
+      limit: 1000,
+      ...(cursor ? { cursor } : {}),
+    });
+    if (listed.objects.length === 0) break;
+    await env.MAIL.delete(listed.objects.map((object) => object.key));
+    deleted += listed.objects.length;
+    cursor = listed.truncated ? listed.cursor : undefined;
+  } while (cursor);
+  return deleted;
+}
+
+export async function flushMail(env: Env): Promise<void> {
+  let forwardTo: string | null = null;
+  try {
+    forwardTo = parseForwardTo(env.bmail_forward_to);
+  } catch (error) {
+    const detail =
+      error instanceof ConfigError ? error.message : "invalid configuration";
+    console.error(`bmail: ${detail}, flush skipped`);
+    return;
+  }
+
+  // The R2 copy is only a staging inbox. Without an archive destination,
+  // deleting it at midnight could destroy the only copy of a message.
+  if (!forwardTo) {
+    console.log("bmail: flush skipped (forwarding disabled)");
+    return;
+  }
+
+  if (typeof env.MAIL?.list !== "function") {
+    console.error("bmail: MAIL is not an R2 binding, flush skipped");
+    return;
+  }
+
+  const messages = await deletePrefix(env, "mail/");
+  if (messages === 0) {
+    console.log("bmail: flush skipped (no mail)");
+    return;
+  }
+
+  const markers = await deletePrefix(env, "latest/");
+  console.log(
+    `bmail: flushed ${messages} message(s) and ${markers} marker(s)`,
+  );
+}
+
 async function handleEmail(
   message: ForwardableEmailMessage,
   env: Env,
@@ -687,5 +739,12 @@ export default {
 
   async email(message: ForwardableEmailMessage, env: Env): Promise<void> {
     await handleEmail(message, env);
+  },
+
+  async scheduled(
+    _controller: ScheduledController,
+    env: Env,
+  ): Promise<void> {
+    await flushMail(env);
   },
 } satisfies ExportedHandler<Env>;

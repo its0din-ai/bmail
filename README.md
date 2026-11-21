@@ -40,7 +40,7 @@ No database, no aliases, no bundled integrations. One Worker, one R2 bucket, one
 - [Sanity check](#sanity-check)
 - [REST API](#rest-api)
 - [ARTEX custom tools](#artex-custom-tools)
-- [Ack and lifecycle](#ack-and-lifecycle)
+- [Ack, scheduled flush, and lifecycle](#ack-scheduled-flush-and-lifecycle)
 - [Free plan budget](#free-plan-budget)
 - [Observability](#observability)
 - [Troubleshooting](#troubleshooting)
@@ -92,7 +92,7 @@ No database, no aliases, no bundled integrations. One Worker, one R2 bucket, one
 5. ARTEX polls the REST API, or you inject a local email during development.
 6. It reads the raw message and parses it in your own code.
 7. After a successful read, `DELETE /v1/inbox/:address/:id` removes the R2 copy. Your forwarded archive is unaffected.
-8. The R2 lifecycle rule deletes anything that was not acknowledged after `bmail_lifecycle_days`.
+8. At `00:00` UTC the scheduled Worker flushes `mail/` and `latest/` if forwarding is configured and R2 contains mail. The R2 lifecycle rule is the fallback for anything that survives the flush.
 
 There is no registration step. The Worker accepts addresses that match its recipient allowlist.
 
@@ -176,7 +176,7 @@ Cloudflare stores these as Worker **secrets** at deploy time. Secrets are not de
 
 `bmail_forward_to` is optional and is not prompted, because the deploy form treats every listed value as required. Add it afterward in **Settings** > **Variables and Secrets** if you want forwarding. If it is absent or empty, the Worker stores mail normally and does not forward or throw an error.
 
-The repository must be public and pushed for the button to work. After it finishes, configure Email Routing and add the R2 lifecycle rules manually, because the one-click flow does not run `pnpm deploy:worker`.
+The daily `0 0 * * *` Cron Trigger comes from `wrangler.jsonc`, so it is included automatically. The repository must be public and pushed for the button to work. After it finishes, configure Email Routing and add the R2 lifecycle rules manually, because the one-click flow does not run `pnpm deploy:worker`.
 
 If the button fails or you use a fork, point the `url` parameter at your public repository root.
 
@@ -274,6 +274,8 @@ Go to **R2 object storage** > your bucket > **Settings** > **Object lifecycle ru
 - Rule `bmail-expire-latest`, prefix `latest/`, delete after 7 days.
 
 Use a longer window if you want more recovery time. New rules can take up to 24 hours to apply. The Worker does not need `bmail_lifecycle_days` in the dashboard path; that variable is only used by `pnpm deploy:worker`.
+
+Then add the daily flush in **Settings** > **Trigger Events** > **Cron Triggers**: `0 0 * * *` (UTC). The Git and one-click paths get it from `wrangler.jsonc`. The flush only deletes when `bmail_forward_to` is configured and R2 contains mail.
 
 ### 7. Route mail to the Worker
 
@@ -464,12 +466,17 @@ Notes:
 - `bmail_ack_message` deletes the R2 copy. It is destructive; call it only after a successful read.
 - The API key is stored in the tool's Authorization header. ARTEX masks header values in its tool UI. If you do not want the key in the chat transcript, create the tools with a placeholder and set the header in the ARTEX UI afterward.
 
-## Ack and lifecycle
+## Ack, scheduled flush, and lifecycle
 
 - `DELETE /v1/inbox/:address/:id` removes `mail/<address>/<id>.eml` immediately.
 - The `latest/<address>` marker may still point at the deleted object. New mail updates it, so this is harmless.
-- `pnpm deploy:worker` sets two R2 lifecycle rules, `mail/` and `latest/`, each expiring after `bmail_lifecycle_days` (default 7).
+- `wrangler.jsonc` declares the Cron Trigger `0 0 * * *`, which runs every day at `00:00` UTC.
+- Before deleting, the scheduled handler lists `mail/`. If there is no mail, it deletes nothing. If there is mail, it deletes `mail/` in pages and then removes the `latest/` markers.
+- The flush only runs when `bmail_forward_to` is configured. Without a forwarding destination, the R2 copy may be the only copy, so the flush is skipped.
+- `pnpm deploy:worker` sets two R2 lifecycle rules, `mail/` and `latest/`, each expiring after `bmail_lifecycle_days` (default 7). The lifecycle rules are the fallback if the daily cron misses.
 - The lifecycle command replaces the bucket's lifecycle configuration, so use a dedicated bucket or merge your own rules into the generated file.
+
+If you use the R2 inbox through the REST API and do not have a forwarded archive, remove the Cron Trigger or set `bmail_forward_to` only after you are ready for daily deletion.
 
 ## Free plan budget
 
@@ -481,6 +488,7 @@ Notes:
 | Poll that finds new mail | Class B + A | 1 `head` plus 1 `list`. |
 | List without a cursor | Class A | First call only. |
 | Acknowledge a message | Free | 1 `DeleteObject` per ack. |
+| Daily flush | Class A + free deletes | 1 list per 1000 mail objects, plus `DeleteObject` calls. Skipped when there is no mail. |
 
 A cursor poll does not call `ListObjects` unless the latest marker says something newer exists. That keeps polling cheap.
 

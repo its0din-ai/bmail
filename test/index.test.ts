@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  flushMail,
   parseForwardTo,
   parseRecipients,
   prepareForwardedRaw,
@@ -115,6 +116,64 @@ describe("prepareForwardedRaw", () => {
     const text = new TextDecoder().decode(output);
     expect(text).toContain("Subject: BMail :: Already prefixed");
     expect(text).not.toContain("BMail :: BMail ::");
+  });
+});
+
+describe("flushMail", () => {
+  class FakeBucket {
+    readonly objects: Set<string>;
+    readonly deleted: string[] = [];
+
+    constructor(keys: string[]) {
+      this.objects = new Set(keys);
+    }
+
+    async list(options: { prefix?: string; limit?: number } = {}) {
+      const prefix = options.prefix ?? "";
+      const keys = [...this.objects]
+        .filter((key) => key.startsWith(prefix))
+        .sort();
+      return {
+        objects: keys
+          .slice(0, options.limit ?? 1000)
+          .map((key) => ({ key })),
+        delimitedPrefixes: [],
+        truncated: false as const,
+      };
+    }
+
+    async delete(keys: string | string[]): Promise<void> {
+      for (const key of Array.isArray(keys) ? keys : [keys]) {
+        this.objects.delete(key);
+        this.deleted.push(key);
+      }
+    }
+  }
+
+  function envWith(bucket: FakeBucket, forwardTo: string) {
+    return {
+      MAIL: bucket,
+      bmail_forward_to: forwardTo,
+    } as unknown as Parameters<typeof flushMail>[0];
+  }
+
+  it("does not delete when forwarding is disabled", async () => {
+    const bucket = new FakeBucket(["mail/a.eml", "latest/a"]);
+    await flushMail(envWith(bucket, "none"));
+    expect(bucket.deleted).toEqual([]);
+  });
+
+  it("does not delete when there is no mail", async () => {
+    const bucket = new FakeBucket(["latest/stale"]);
+    await flushMail(envWith(bucket, "archive@example.com"));
+    expect(bucket.deleted).toEqual([]);
+  });
+
+  it("deletes mail and markers when mail exists", async () => {
+    const bucket = new FakeBucket(["mail/a.eml", "latest/a"]);
+    await flushMail(envWith(bucket, "archive@example.com"));
+    expect(bucket.deleted.sort()).toEqual(["latest/a", "mail/a.eml"]);
+    expect(bucket.objects.size).toBe(0);
   });
 });
 
