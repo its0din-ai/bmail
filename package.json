@@ -1,6 +1,6 @@
 {
   "name": "bmail",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@12.21.0",
@@ -24,10 +24,13 @@
   "cloudflare": {
     "bindings": {
       "bmail_mail_domains": {
-        "description": "Comma-separated allowlist. A domain accepts any local part; a full address is exact. For example: mail.example.com,bbounty@programs.example.net"
+        "description": "Required. Comma-separated allowlist. A domain accepts any local part; a full address is exact. For example: mail.example.com,bbounty@programs.example.net"
       },
       "bmail_api_key": {
-        "description": "Shared API key for the REST API. At least 16 characters. Generate one with: openssl rand -hex 32"
+        "description": "Required. Shared API key (bearer token) for the REST API. At least 16 characters. Generate one with: openssl rand -hex 32"
+      },
+      "bmail_forward_to": {
+        "description": "Optional. Forward every caught message to this address. Verify it first under Email Routing > Destination addresses, and do not route it back to this Worker. Enter `none` to disable forwarding."
       }
     }
   }

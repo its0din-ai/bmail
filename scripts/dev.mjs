@@ -28,7 +28,7 @@ function parseEnv(path) {
 }
 
 const env = parseEnv(".env");
-const keys = ["bmail_mail_domains", "bmail_api_key"];
+const keys = ["bmail_mail_domains", "bmail_api_key", "bmail_forward_to"];
 const lines = keys
   .filter((key) => env[key] !== undefined)
   .map((key) => `${key}=${env[key]}`);

@@ -31,6 +31,7 @@ No database, no aliases, no bundled integrations. One Worker, one R2 bucket, one
 - [Architecture](#architecture)
 - [Flow](#flow)
 - [Recipient allowlist](#recipient-allowlist)
+- [Forwarding](#forwarding)
 - [Requirements](#requirements)
 - [Setup](#setup)
 - [Deploy with the Cloudflare dashboard](#deploy-with-the-cloudflare-dashboard)
@@ -69,7 +70,7 @@ No database, no aliases, no bundled integrations. One Worker, one R2 bucket, one
                               v
              Cloudflare Email Routing  (MX, catch-all)
                     |                       |
-                    |                       +--> optional forward --> personal inbox (archive)
+                    |                       +--> bmail_forward_to --> personal inbox (archive)
                     v
              Cloudflare Worker  email()
                     |
@@ -87,10 +88,11 @@ No database, no aliases, no bundled integrations. One Worker, one R2 bucket, one
 1. Pick an address that matches the allowlist, for example `test@mail.example.com` or `bbounty@programs.example.net`.
 2. Cloudflare Email Routing delivers it to the Worker.
 3. The Worker stores the raw MIME in R2 and updates `latest/<address>`.
-4. ARTEX polls the REST API, or you inject a local email during development.
-5. It reads the raw message and parses it in your own code.
-6. After a successful read, `DELETE /v1/inbox/:address/:id` removes the R2 copy. Your forwarded archive is unaffected.
-7. The R2 lifecycle rule deletes anything that was not acknowledged after `bmail_lifecycle_days`.
+4. If `bmail_forward_to` is set, the Worker forwards a copy to that destination.
+5. ARTEX polls the REST API, or you inject a local email during development.
+6. It reads the raw message and parses it in your own code.
+7. After a successful read, `DELETE /v1/inbox/:address/:id` removes the R2 copy. Your forwarded archive is unaffected.
+8. The R2 lifecycle rule deletes anything that was not acknowledged after `bmail_lifecycle_days`.
 
 There is no registration step. The Worker accepts addresses that match its recipient allowlist.
 
@@ -126,6 +128,20 @@ programs.example.net           catch-all -> personal inbox (archive)
 
 The literal rule wins over the catch-all, so only `bbounty@programs.example.net` reaches the Worker on that domain.
 
+## Forwarding
+
+Set `bmail_forward_to` to one address when you also want a normal inbox copy:
+
+```bash
+bmail_forward_to=archive@example.net
+```
+
+The Worker stores the message in R2 first, then calls `message.forward()`. A forward failure is logged as `bmail: forward failed` and does not reject or delete the R2 copy, so ingestion still succeeds.
+
+Cloudflare requires the destination to be **verified** under **Email Routing** > **Destination addresses**. It also refuses to forward to an address that routes back to the same Worker, which prevents mail loops. Use `none` or an empty value to disable forwarding. `bmail_forward_to` accepts one full email address, not a domain or a comma-separated list.
+
+If you prefer, you can skip `bmail_forward_to` and keep the personal archive on the Email Routing catch-all instead, as shown above. Do not give the same routing rule two actions.
+
 ## Requirements
 
 - Cloudflare account on the Free plan.
@@ -139,16 +155,23 @@ The literal rule wins over the catch-all, so only `bbounty@programs.example.net`
 pnpm install
 cp .env.example .env
 # fill in bmail_mail_domains, bmail_api_key, cloudflare_r2_bucket_name
+# optionally set bmail_forward_to to a verified destination
 wrangler login
 wrangler r2 bucket create <cloudflare_r2_bucket_name>
 pnpm deploy:worker
 ```
 
-`pnpm deploy:worker` deploys the Worker, uploads `bmail_api_key` as a secret, and sets the R2 lifecycle rules.
+`pnpm deploy:worker` deploys the Worker, uploads `bmail_api_key` as a secret, maps `bmail_mail_domains` and `bmail_forward_to` as runtime variables, and sets the R2 lifecycle rules.
 
 ### One-click deploy
 
-The **Deploy to Cloudflare** button next to the Workers badge targets the public `its0din-ai/bmail` repository. It provisions the R2 binding from `wrangler.jsonc`. Set `bmail_mail_domains` and `bmail_api_key` in **Settings** > **Variables and Secrets** after it finishes.
+The **Deploy to Cloudflare** button next to the Workers badge targets the public `its0din-ai/bmail` repository. It provisions the R2 binding from `wrangler.jsonc` and prompts for all three runtime values from `.dev.vars.example`:
+
+- `bmail_api_key` - the bearer token for the REST API.
+- `bmail_mail_domains` - the comma-separated allowlist of addresses or domains to catch.
+- `bmail_forward_to` - a verified forwarding destination, or `none` to disable forwarding.
+
+Cloudflare stores these as Worker **secrets** at deploy time. Secrets are not deleted by later deploys, so rebuilding the Worker from Git keeps the same environment. The button also sets `keep_vars: true`, which protects any plaintext variables you add in the dashboard.
 
 The repository must be public and pushed for the button to work. After it finishes, configure Email Routing and add the R2 lifecycle rules manually, because the one-click flow does not run `pnpm deploy:worker`.
 
@@ -159,7 +182,7 @@ Then in the Cloudflare dashboard:
 1. Enable Email Routing on each domain used in `bmail_mail_domains`.
 2. For a catch-all domain, set the catch-all action to the `bmail` Worker.
 3. For a single address, create one literal routing rule to the `bmail` Worker.
-4. If you want a personal archive, do not give the same rule two actions. Either use a literal rule for the agent address and leave the catch-all forwarding to your inbox, or run bmail on a separate subdomain with its own catch-all.
+4. If you want a personal archive, either set `bmail_forward_to` to a verified destination (it must not route back to this Worker), or use a literal rule for the agent address and leave the catch-all forwarding to your inbox. Do not give the same rule two actions.
 
 ## Deploy with the Cloudflare dashboard
 
@@ -224,6 +247,9 @@ In the Worker settings:
 - **Variables and Secrets**:
   - `bmail_mail_domains` as text: a comma-separated allowlist. A domain accepts any local part; a full address is exact. For example `mail.example.com,bbounty@programs.example.net`
   - `bmail_api_key` as a secret: at least 16 random characters
+  - `bmail_forward_to` as text (optional): one verified destination address, or `none`
+
+Plaintext variables survive redeploys because `wrangler.jsonc` sets `keep_vars: true`. Secrets are never deleted by a deploy. If you use the one-click button, all three values are already stored as secrets.
 
 Do not add `cloudflare_r2_bucket_name` as a Worker variable. It is only read by `pnpm deploy:worker`; the dashboard path uses the R2 binding instead.
 
@@ -249,7 +275,7 @@ Go to **Compute** > **Email Service** > **Email Routing**, or the zone's **Email
 1. Enable Email Routing for the domain. For a subdomain, add it under **Settings** > **Subdomains** first.
 2. For a catch-all domain: **Routing rules** > **Catch-all** > action **Send to Worker** > `bmail`.
 3. For one address: **Create routing rule**, enter the local part, action **Send to Worker** > `bmail`.
-4. If you need a personal archive, remember that a catch-all has only one action. Use a literal rule for the agent address to the Worker and leave the catch-all forwarding to your inbox, or run bmail on a separate subdomain.
+4. If you need a personal archive, either set `bmail_forward_to` and verify that destination under **Destination addresses**, or use a literal rule for the agent address to the Worker and leave the catch-all forwarding to your inbox. Do not route the forwarding destination back to this Worker.
 
 ### 8. Verify
 
@@ -270,17 +296,19 @@ The following values are only used by the CLI deploy script, so you can leave th
 
 ### Runtime variables and secrets
 
-- `bmail_mail_domains` is a plaintext runtime variable. Set it in **Settings** > **Variables and Secrets**. `wrangler.jsonc` sets `keep_vars: true`, so a deploy does not delete it.
-- `bmail_api_key` must be a runtime **secret**, not a build secret. Deploys do not delete secrets.
+- `bmail_mail_domains`, `bmail_api_key`, and `bmail_forward_to` are runtime values. Set them in **Settings** > **Variables and Secrets**.
+- The Deploy to Cloudflare button prompts for all three from `.dev.vars.example` and stores them as **secrets**. Secrets are not deleted by a deploy, so a rebuild keeps the same environment.
+- `wrangler.jsonc` sets `keep_vars: true`. That protects plaintext variables you add in the dashboard from a rebuild or redeploy.
 - **Build** variables and secrets are available only during the build. The Worker cannot read them with `env.*`.
-- Do not add `bmail_api_key` to `vars` or commit it.
+- Do not commit real values or add secrets to `vars` in `wrangler.jsonc`.
 
-`.env` is the source of truth. `pnpm dev` writes `.dev.vars`; `pnpm deploy:worker` maps the values to Worker vars and secrets.
+`.env` is the source of truth for local and CLI use. `pnpm dev` writes `.dev.vars`; `pnpm deploy:worker` maps the values to Worker vars and secrets.
 
 | Key | Used by | Purpose |
 |---|---|---|
 | `bmail_mail_domains` | Worker | Comma-separated allowlist. Domain entries accept any local part; full-address entries are exact. |
 | `bmail_api_key` | Worker and smoke test | Shared bearer key, 16+ characters. |
+| `bmail_forward_to` | Worker | Optional verified destination for forwarding every caught message. `none` or empty disables it. |
 | `bmail_lifecycle_days` | CLI deploy | R2 expiry for `mail/` and `latest/`, default 7. The dashboard path sets these rules in the UI. |
 | `cloudflare_worker_name` | Deploy | Worker name. |
 | `cloudflare_r2_bucket_name` | Deploy | R2 bucket name. |
@@ -357,7 +385,7 @@ A deployed Worker cannot inject mail into Email Routing, so the real email is re
 
 ### Manual checklist
 
-1. `GET /health` returns `{ "ok": true, "ready": true }` and all three checks pass.
+1. `GET /health` returns `{ "ok": true, "ready": true }` and all four checks pass.
 2. Send a message with a unique subject.
 3. `GET /v1/inbox/<address>` returns metadata; copy the `id`.
 4. `GET /v1/inbox/<address>/<id>` returns the raw MIME with your marker.
@@ -475,23 +503,24 @@ R2 Free includes 1M Class A operations, 10M Class B operations, and 10 GB-month 
 
 ### `ready: false` on `/health`
 
-`GET /health` reports the three runtime prerequisites:
+`GET /health` reports the runtime prerequisites:
 
 ```json
 {
   "ok": true,
   "ready": false,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "checks": {
     "bmail_mail_domains": { "present": true, "valid": true },
     "bmail_api_key": { "present": false, "valid": false },
+    "bmail_forward_to": { "present": true, "valid": true },
     "r2_binding": false
   }
 }
 ```
 
 - `present: false` - the variable or secret is not on the running Worker version. Check the environment (Production vs Preview), make sure it is a runtime variable and not a build variable, and deploy a new version.
-- `present: true` and `valid: false` - the value exists but is unusable. For `bmail_mail_domains`, check quotes, wildcards, or an empty entry. For `bmail_api_key`, the value must be at least 16 characters.
+- `present: true` and `valid: false` - the value exists but is unusable. For `bmail_mail_domains`, check quotes, wildcards, or an empty entry. For `bmail_api_key`, the value must be at least 16 characters. For `bmail_forward_to`, use one full address or `none`.
 - `r2_binding: false` - add an **R2 bucket binding** with variable name `MAIL`. A plain text variable named `MAIL` does not count; the check requires the R2 API. An environment variable named `cloudflare_r2_bucket_name` is not a binding and the Worker does not read it.
 
 Make the change, deploy a new version, and call `/health` again. The Worker also logs a `bmail: not ready {...}` line with the same presence and validity flags, visible in `wrangler tail`.
@@ -509,6 +538,8 @@ The Email Routing activity log only reports a generic upstream error. The Worker
 3. Look for:
    - `bmail: received <address> size=<n>` - the handler started.
    - `bmail: stored <address> id=<id>` - the R2 writes succeeded.
+   - `bmail: forwarded <address> to <destination>` - the optional forward succeeded.
+   - `bmail: forward failed` - the message was stored, but forwarding failed. Verify the destination under Email Routing > Destination addresses and make sure it does not route back to this Worker. This does not reject the message.
    - `bmail: MAIL is not an R2 binding` - delete any plain variable named `MAIL` and add an R2 bucket binding named `MAIL`.
    - `bmail: R2 message write failed` - the binding exists but the write failed; check the bucket still exists, the binding points to the right bucket, and R2 usage is within quota.
    - `Provided readable stream must have a known length` - the deployed Worker is older than the `FixedLengthStream` fix. Production R2 rejects unknown-length streams, while local R2 is more permissive. Redeploy the current `src/index.ts`.
@@ -573,7 +604,7 @@ wrangler.jsonc          Worker configuration
 - Only the first `Authentication-Results` header with `mx.cloudflare.net` as authserv-id is trusted for DMARC.
 - R2 is private. Only the Worker binding reads it.
 - MIME parsing happens in your tool, not in the Worker.
-- The forwarded personal archive is the source of truth. Ack only removes the R2 copy.
+- When `bmail_forward_to` is set, the forwarded copy is an archive; ack only removes the R2 copy. The destination must be verified in Email Routing and must not route back to this Worker.
 - There is no rate limiting. The Workers daily request cap is the backstop.
 
 ## Limits
@@ -581,7 +612,7 @@ wrangler.jsonc          Worker configuration
 - Inbound message size is capped by Cloudflare at 25 MiB.
 - `limit` is capped at 200 per list call.
 - There is no bundled client or UI.
-- There is no alias manager, outbound mail, or D1.
+- There is no alias manager, arbitrary outbound mail, or D1. The only outbound message is the optional forward.
 
 ## License
 

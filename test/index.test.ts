@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  parseForwardTo,
   parseRecipients,
   readDmarc,
   recipientAllowed,
@@ -34,6 +35,29 @@ describe("parseRecipients", () => {
     expect(() => parseRecipients("*@mail.example.com")).toThrow(/wildcards/);
     expect(() => parseRecipients("*")).toThrow(/wildcards/);
     expect(() => parseRecipients("*.mail.example.com")).toThrow(/wildcards/);
+  });
+});
+
+describe("parseForwardTo", () => {
+  it("normalizes a single destination address", () => {
+    expect(parseForwardTo(" Archive@Example.com ")).toBe("archive@example.com");
+  });
+
+  it("treats an empty value, none, and off as disabled", () => {
+    expect(parseForwardTo(undefined)).toBeNull();
+    expect(parseForwardTo("")).toBeNull();
+    expect(parseForwardTo(" NONE ")).toBeNull();
+    expect(parseForwardTo("off")).toBeNull();
+  });
+
+  it("rejects a bare domain", () => {
+    expect(() => parseForwardTo("mail.example.com")).toThrow(/forward address/);
+  });
+
+  it("rejects a malformed address", () => {
+    expect(() => parseForwardTo("a/b@mail.example.com")).toThrow(
+      /forward address/,
+    );
   });
 });
 

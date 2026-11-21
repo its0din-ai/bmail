@@ -59,6 +59,7 @@ if (env.cloudflare_account_id) {
   args.push("--account-id", env.cloudflare_account_id);
 }
 args.push("--var", `bmail_mail_domains:${env.bmail_mail_domains}`);
+args.push("--var", `bmail_forward_to:${env.bmail_forward_to || "none"}`);
 
 const deployed = spawnSync("wrangler", args, {
   stdio: "inherit",

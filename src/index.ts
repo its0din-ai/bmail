@@ -2,6 +2,7 @@ interface Env {
   MAIL: R2Bucket;
   bmail_mail_domains?: string;
   bmail_api_key?: string;
+  bmail_forward_to?: string;
 }
 
 const MAX_MESSAGE_BYTES = 25 * 1024 * 1024;
@@ -73,6 +74,16 @@ export function parseRecipients(raw: string | undefined): RecipientConfig {
     throw new ConfigError("bmail_mail_domains is empty");
   }
   return { domains, addresses };
+}
+
+export function parseForwardTo(raw: string | undefined): string | null {
+  const value = (raw ?? "").trim().toLowerCase();
+  if (!value || value === "none" || value === "off") return null;
+  const parts = splitAddress(value);
+  if (!parts) {
+    throw new ConfigError(`invalid forward address: ${value}`);
+  }
+  return `${parts.local_part}@${parts.mail_domain}`;
 }
 
 export function recipientAllowed(
@@ -269,8 +280,16 @@ async function handleFetch(request: Request, env: Env): Promise<Response> {
     }
     const apiKeyPresent = Boolean((env.bmail_api_key ?? "").trim());
     const apiKeyValid = Boolean(apiKeyFromEnv(env));
+    const forwardToPresent = Boolean((env.bmail_forward_to ?? "").trim());
+    let forwardToValid = false;
+    try {
+      parseForwardTo(env.bmail_forward_to);
+      forwardToValid = true;
+    } catch {
+      forwardToValid = false;
+    }
     const r2Ok = typeof env.MAIL?.put === "function";
-    const ready = mailDomainsValid && apiKeyValid && r2Ok;
+    const ready = mailDomainsValid && apiKeyValid && forwardToValid && r2Ok;
 
     if (!ready) {
       console.log(
@@ -279,6 +298,8 @@ async function handleFetch(request: Request, env: Env): Promise<Response> {
           bmail_mail_domains_valid: mailDomainsValid,
           bmail_api_key_present: apiKeyPresent,
           bmail_api_key_valid: apiKeyValid,
+          bmail_forward_to_present: forwardToPresent,
+          bmail_forward_to_valid: forwardToValid,
           r2_binding: r2Ok,
         })}`,
       );
@@ -287,13 +308,14 @@ async function handleFetch(request: Request, env: Env): Promise<Response> {
     return json({
       ok: true,
       ready,
-      version: "0.1.0",
+      version: "0.2.0",
       checks: {
         bmail_mail_domains: {
           present: mailDomainsPresent,
           valid: mailDomainsValid,
         },
         bmail_api_key: { present: apiKeyPresent, valid: apiKeyValid },
+        bmail_forward_to: { present: forwardToPresent, valid: forwardToValid },
         r2_binding: r2Ok,
       },
     });
@@ -373,6 +395,15 @@ async function handleEmail(
     return;
   }
 
+  let forwardTo: string | null = null;
+  try {
+    forwardTo = parseForwardTo(env.bmail_forward_to);
+  } catch (error) {
+    const detail =
+      error instanceof ConfigError ? error.message : "invalid configuration";
+    console.error(`bmail: ${detail}, forwarding disabled`);
+  }
+
   if (message.rawSize > MAX_MESSAGE_BYTES) {
     message.setReject("Message too large");
     return;
@@ -433,6 +464,25 @@ async function handleEmail(
   }
 
   console.log(`bmail: stored ${address} id=${id}`);
+
+  if (!forwardTo) return;
+
+  try {
+    await message.forward(
+      forwardTo,
+      new Headers({ "X-Bmail-Original-To": address }),
+    );
+    console.log(`bmail: forwarded ${address} to ${forwardTo} id=${id}`);
+  } catch (error) {
+    // Keeping the R2 copy is more important than the archive forward. A failed
+    // destination (unverified or routed back to this Worker) must not reject
+    // mail that was already stored.
+    console.error(
+      `bmail: forward failed for ${address} id=${id} to ${forwardTo}: ${
+        error instanceof Error ? (error.stack ?? error.message) : String(error)
+      }`,
+    );
+  }
 }
 
 export default {
